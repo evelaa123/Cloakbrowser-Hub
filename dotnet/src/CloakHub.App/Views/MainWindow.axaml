@@ -13,6 +13,25 @@
         Background="{DynamicResource BgBrush}">
 
   <!--
+    Everything sits inside a LayoutTransformControl so the zoom setting scales the
+    whole interface, not just the text.
+
+    A RenderTransform would be wrong here: it scales the rendered pixels after
+    layout, so at 125% the content would be drawn larger than the space measured for
+    it and simply overflow the window edge. LayoutTransformControl applies the scale
+    *during* measure, so children are given the correspondingly smaller space and
+    wrapping, scrollbars and the sidebar width all stay correct.
+
+    Scaling the layout rather than raising font sizes is also the only thing that
+    actually answers "everything is too small": padding, row heights and border radii
+    are fixed sizes too, so larger text alone in unchanged boxes just looks cramped.
+  -->
+  <LayoutTransformControl Name="ZoomRoot">
+    <LayoutTransformControl.LayoutTransform>
+      <ScaleTransform ScaleX="{Binding UiZoom}" ScaleY="{Binding UiZoom}" />
+    </LayoutTransformControl.LayoutTransform>
+
+  <!--
     A two-column grid rather than a DockPanel. The sidebar is a fixed width taken
     from the palette (the CSS sidebar-w token), and a Grid states that directly; a
     DockPanel would need the width set on the child and reads less like the layout
@@ -149,4 +168,5 @@
 
     </Panel>
   </Grid>
+  </LayoutTransformControl>
 </Window>

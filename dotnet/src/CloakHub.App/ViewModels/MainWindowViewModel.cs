@@ -36,7 +36,12 @@ public sealed class MainWindowViewModel : ViewModelBase
         Toasts = new ToastHost();
 
         ProfilesPage = new ProfilesPageViewModel(profiles, settings, paths, Toasts);
-        SettingsPage = new SettingsPageViewModel(settings, paths, Toasts, OnThemeChanged);
+        SettingsPage = new SettingsPageViewModel(settings, paths, Toasts, OnThemeChanged, OnZoomChanged);
+
+        // The window scales against this, so it has to start at the stored value --
+        // otherwise the app opens at 100% and only jumps to the user's size when they
+        // next visit the settings page.
+        _uiZoom = settings.Current.UiZoom;
 
         NavigateCommand = new RelayCommand<Route>(Navigate);
 
@@ -146,6 +151,23 @@ public sealed class MainWindowViewModel : ViewModelBase
     public bool HasMark => Branding.Mark is not null;
 
     private void OnThemeChanged(AppTheme theme) => App.ApplyTheme(theme);
+
+    /// <summary>
+    /// Interface scale, bound by the window's <c>LayoutTransformControl</c>.
+    /// <para>
+    /// Lives on the shell rather than the settings page because the transform wraps
+    /// the whole window, including the sidebar and every other page. Binding it to
+    /// the settings view model would make the scale depend on which screen is open.
+    /// </para>
+    /// </summary>
+    private double _uiZoom = 1.0;
+    public double UiZoom
+    {
+        get => _uiZoom;
+        private set => SetField(ref _uiZoom, value);
+    }
+
+    private void OnZoomChanged(double zoom) => UiZoom = zoom;
 
     /// <summary>
     /// Called as the app closes.

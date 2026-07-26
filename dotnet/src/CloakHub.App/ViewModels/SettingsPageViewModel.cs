@@ -27,6 +27,7 @@ public sealed class SettingsPageViewModel : ViewModelBase
     private readonly HubPaths _paths;
     private readonly ToastHost _toasts;
     private readonly Action<AppTheme> _onThemeChanged;
+    private readonly Action<double> _onZoomChanged;
 
     /// <summary>
     /// Suppresses write-through while the view model is populating its own fields.
@@ -43,12 +44,14 @@ public sealed class SettingsPageViewModel : ViewModelBase
         SettingsStore settings,
         HubPaths paths,
         ToastHost toasts,
-        Action<AppTheme> onThemeChanged)
+        Action<AppTheme> onThemeChanged,
+        Action<double> onZoomChanged)
     {
         _settings = settings;
         _paths = paths;
         _toasts = toasts;
         _onThemeChanged = onThemeChanged;
+        _onZoomChanged = onZoomChanged;
 
         OpenProfilesFolderCommand = new RelayCommand(() => Reveal(EffectiveProfilesDir));
         OpenDataFolderCommand = new RelayCommand(() => Reveal(_paths.Root));
@@ -116,6 +119,11 @@ public sealed class SettingsPageViewModel : ViewModelBase
             if (!SetField(ref _uiZoom, snapped) || _loading) return;
             Save(s => s with { UiZoom = snapped });
             OnPropertyChanged(nameof(ZoomLabel));
+
+            // Applied immediately, not on next launch. Choosing a size and seeing
+            // nothing happen reads as a broken setting, and the whole point of the
+            // control is judging the result by eye.
+            _onZoomChanged(snapped);
         }
     }
 
