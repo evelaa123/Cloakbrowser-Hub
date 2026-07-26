@@ -8,6 +8,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron';
 import type {
@@ -18,6 +19,7 @@ import type {
   BinaryState,
   CookieValidation,
   DiscoveredBrowserProfile,
+  FolderScan,
   LicenseState,
   Profile,
   ProfileRow,
@@ -58,11 +60,14 @@ import {
   saveKey,
   validateKey,
   planSeatHint,
+  setKnownPlanSeats,
 } from '../services/license';
 import { checkProxy, parseProxyList, rotateProxy } from '../services/proxy';
 import { AutomationServer } from '../services/automation';
 import { Sessions } from '../browser/session-manager';
 import { COOKIE_FILE_FILTERS, cloneProfileData, discoverProfiles, readChromiumHints } from '../importers/browser-profiles';
+import { extractionDir, isSupportedArchive, scanFolderForProfiles } from '../importers/scan-folder';
+import { cleanupExtraction, extractZip, isInside } from '../importers/extract-archive';
 
 type Handler<A extends unknown[], R> = (...args: A) => Promise<R> | R;
 
@@ -177,6 +182,19 @@ function refreshCookieMeta(profileId: string, source: 'import' | 'session' | 'ma
   return Profiles.update(profileId, {
     cookies: { count: cookies.length, domains: domains.size, updatedAt: Date.now(), source },
   });
+}
+
+/**
+ * Callback invoked when the UI zoom setting changes.
+ *
+ * A plain callback rather than importing the window helper directly: `index.ts`
+ * already imports this module, so importing back would be a cycle. Registration
+ * keeps the dependency pointing one way.
+ */
+let onZoomChanged: ((zoom: number | undefined) => void) | undefined;
+
+export function setZoomListener(fn: (zoom: number | undefined) => void): void {
+  onZoomChanged = fn;
 }
 
 export function registerIpcHandlers(): void {
@@ -457,10 +475,21 @@ export function registerIpcHandlers(): void {
     if (!info.valid) throw new Error('That license key is invalid or expired. Nothing was saved.');
 
     saveKey(trimmed);
-    // Align the app's session guard with what the plan actually allows, so the
-    // user is not blocked below their entitlement (or allowed far above it).
+
     const seats = planSeatHint(info.plan);
-    if (seats && seats !== Settings.get().maxConcurrentSessions) {
+    // Cache the seat count so the very next launch enforces the real plan limit
+    // without waiting on another round-trip.
+    setKnownPlanSeats(seats);
+    // Raise the stored preference to the entitlement, but never lower it.
+    //
+    // This used to assign `seats` unconditionally, which meant activating a key
+    // silently overwrote a deliberate choice: a user who had capped themselves
+    // at 3 because their laptop cannot run more found the value jump to 20.
+    // Raising is safe (the old value was the factory default holding them below
+    // what they paid for); lowering is not, and is unnecessary anyway because
+    // `resolveSessionLimit` already clamps to the plan at launch time.
+    const current = Settings.get().maxConcurrentSessions;
+    if (seats && seats > current) {
       Settings.update({ maxConcurrentSessions: seats });
     }
     const state = await licenseState(Sessions.runningCount());
@@ -496,6 +525,76 @@ export function registerIpcHandlers(): void {
   // -------------------------------------------------------------------------
 
   handle<[], DiscoveredBrowserProfile[]>(IPC.IMPORT_DISCOVER, () => discoverProfiles());
+
+  /**
+   * Scan a folder the user picks.
+   *
+   * Separate from IMPORT_DISCOVER because that one only knows the standard
+   * install locations, which misses every profile that did not come from a
+   * browser installed on this machine — a backup, a copy from another PC, an
+   * external drive.
+   */
+  handle<[string | undefined], FolderScan>(IPC.IMPORT_SCAN_FOLDER, async (dir) => {
+    let target = dir?.trim();
+    if (!target) {
+      const win = mainWindow();
+      const res = await dialog.showOpenDialog(win!, {
+        title: 'Choose a folder containing browser profiles',
+        properties: ['openDirectory'],
+      });
+      if (res.canceled || !res.filePaths.length) return { profiles: [], truncated: false, cancelled: true };
+      target = res.filePaths[0]!;
+    }
+    const scan = scanFolderForProfiles(target);
+    return { ...scan, root: target };
+  });
+
+  /**
+   * Unpack a .zip to a temp dir and scan it.
+   *
+   * The temp dir is returned so the renderer can release it via IMPORT_CLEANUP
+   * once the user has imported (or dismissed) the results. It is not deleted
+   * here because the import itself copies out of it.
+   */
+  handle<[string | undefined], FolderScan>(IPC.IMPORT_SCAN_ARCHIVE, async (file) => {
+    let target = file?.trim();
+    if (!target) {
+      const win = mainWindow();
+      const res = await dialog.showOpenDialog(win!, {
+        title: 'Choose a profile archive',
+        properties: ['openFile'],
+        filters: [{ name: 'Zip archive', extensions: ['zip'] }],
+      });
+      if (res.canceled || !res.filePaths.length) return { profiles: [], truncated: false, cancelled: true };
+      target = res.filePaths[0]!;
+    }
+    if (!isSupportedArchive(target)) {
+      throw new Error('Only .zip archives are supported. Extract the archive yourself and pick the folder instead.');
+    }
+
+    const dir = extractionDir();
+    const extracted = await extractZip(target, dir);
+    if (!extracted.ok) {
+      cleanupExtraction(dir);
+      throw new Error(extracted.error ?? 'The archive could not be extracted.');
+    }
+
+    const scan = scanFolderForProfiles(dir);
+    // A skipped entry is a security decision (unsafe path, symlink) and the user
+    // should be told rather than left wondering why a file is missing.
+    const note = extracted.skipped.length
+      ? `${scan.note ? scan.note + ' ' : ''}${extracted.skipped.length} archive ` +
+        `${extracted.skipped.length === 1 ? 'entry was' : 'entries were'} skipped as unsafe.`
+      : scan.note;
+    return { ...scan, note, root: dir, extractedTo: dir };
+  });
+
+  handle<[string], void>(IPC.IMPORT_CLEANUP, (dir) => {
+    // Only ever delete inside the OS temp dir: this channel takes a path from the
+    // renderer, and an unchecked rm -rf reachable over IPC would be a serious
+    // hole even with a trusted renderer.
+    if (dir && isInside(os.tmpdir(), dir)) cleanupExtraction(dir);
+  });
 
   handle<
     [{ sourcePath: string; browser: string; name?: string; copyData: boolean }],
@@ -542,7 +641,13 @@ export function registerIpcHandlers(): void {
 
   handle<[], AppSettings>(IPC.SETTINGS_GET, () => Settings.get());
 
-  handle<[Partial<AppSettings>], AppSettings>(IPC.SETTINGS_UPDATE, (patch) => Settings.update(patch));
+  handle<[Partial<AppSettings>], AppSettings>(IPC.SETTINGS_UPDATE, (patch) => {
+    const next = Settings.update(patch);
+    // Zoom lives on webContents, which only the main process can touch, so the
+    // renderer changing the setting has to be pushed back out to the window.
+    if (patch.uiZoom !== undefined) onZoomChanged?.(next.uiZoom);
+    return next;
+  });
 
   // -------------------------------------------------------------------------
   // Automation API

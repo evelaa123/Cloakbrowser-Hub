@@ -9,7 +9,7 @@
 
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { DiscoveredBrowserProfile } from '../../shared/types';
+import type { DiscoveredBrowserProfile, FolderScan } from '../../shared/types';
 import { useToast } from '../components/toast';
 import { Callout, Card, Empty, Field, Modal, Spinner } from '../components/ui';
 import type { Route } from '../App';
@@ -22,6 +22,48 @@ export function ImportPage(props: { onNavigate: (r: Route) => void }): JSX.Eleme
   const [name, setName] = useState('');
   const [copyData, setCopyData] = useState(true);
   const [importing, setImporting] = useState(false);
+  /** Which manual scan is running, so both buttons disable together. */
+  const [busy, setBusy] = useState<'folder' | 'archive' | null>(null);
+  /** Results of a manual folder/archive scan, kept separate from the auto-scan. */
+  const [manual, setManual] = useState<FolderScan | null>(null);
+
+  /**
+   * Release the temp directory an archive was unpacked into.
+   *
+   * Only after the user has finished with the results — the import copies files
+   * out of it, so deleting on import would race with the copy.
+   */
+  function releaseExtraction(scan: FolderScan | null): void {
+    if (scan?.extractedTo) void window.hub.importer.cleanup(scan.extractedTo).catch(() => undefined);
+  }
+
+  async function runManualScan(kind: 'folder' | 'archive'): Promise<void> {
+    setBusy(kind);
+    try {
+      const res =
+        kind === 'folder'
+          ? await window.hub.importer.scanFolder()
+          : await window.hub.importer.scanArchive();
+      if (res.cancelled) return;
+
+      // Replacing an earlier archive scan: free the previous temp dir first, or
+      // it leaks until the OS clears /tmp.
+      if (manual?.extractedTo && manual.extractedTo !== res.extractedTo) releaseExtraction(manual);
+
+      setManual(res);
+      if (!res.profiles.length && res.note) toast.warn(res.note);
+      else if (res.truncated) {
+        toast.warn('That folder is very large, so the scan stopped early. Pick a more specific folder if your profile is missing.');
+      }
+    } catch (e) {
+      toast.err(e);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const pickFolder = (): Promise<void> => runManualScan('folder');
+  const pickArchive = (): Promise<void> => runManualScan('archive');
 
   async function scan(): Promise<void> {
     setScanning(true);
@@ -77,7 +119,13 @@ export function ImportPage(props: { onNavigate: (r: Route) => void }): JSX.Eleme
           <div class="sub">Bring an existing browser profile into the Hub</div>
         </div>
         <div class="topbar-actions">
-          <button class="btn" onClick={scan} disabled={scanning}>
+          <button class="btn" onClick={() => void pickFolder()} disabled={scanning || busy !== null}>
+            {busy === 'folder' ? 'Scanning…' : 'Scan a folder…'}
+          </button>
+          <button class="btn" onClick={() => void pickArchive()} disabled={scanning || busy !== null}>
+            {busy === 'archive' ? 'Unpacking…' : 'Import from .zip…'}
+          </button>
+          <button class="btn" onClick={scan} disabled={scanning || busy !== null}>
             {scanning ? 'Scanning…' : 'Re-scan'}
           </button>
         </div>
@@ -89,6 +137,75 @@ export function ImportPage(props: { onNavigate: (r: Route) => void }): JSX.Eleme
           on its profile and copying it then would produce a corrupted session — the import refuses
           to run in that case rather than giving you a broken profile.
         </Callout>
+
+        {manual && (
+          <div style={{ marginTop: 14 }}>
+            <Card
+              title={manual.extractedTo ? 'Profiles found in the archive' : 'Profiles found in that folder'}
+              desc={manual.root}
+            >
+              {manual.profiles.length ? (
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Browser</th>
+                        <th>Profile</th>
+                        <th>Cookies</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {manual.profiles.map((p) => (
+                        <tr key={p.path}>
+                          <td class="nowrap">{p.browser}</td>
+                          <td style={{ maxWidth: 380 }}>
+                            <div class="name-main">
+                              <div class="title">{p.name}</div>
+                              <div class="meta mono" title={p.path}>
+                                {p.path}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            {p.hasCookies ? (
+                              <span class="badge ok">Present</span>
+                            ) : (
+                              <span class="badge">None</span>
+                            )}
+                          </td>
+                          <td class="actions">
+                            <button class="btn sm primary" onClick={() => openDialog(p)}>
+                              Import
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Empty icon="⤓" title="Nothing importable there" text={manual.note ?? ''} />
+              )}
+              {manual.note && manual.profiles.length ? (
+                <div class="faint" style={{ marginTop: 10 }}>
+                  {manual.note}
+                </div>
+              ) : null}
+              <div style={{ marginTop: 12 }}>
+                <button
+                  class="btn sm"
+                  onClick={() => {
+                    releaseExtraction(manual);
+                    setManual(null);
+                  }}
+                >
+                  Clear results
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         <div style={{ marginTop: 14 }}>
           <Card

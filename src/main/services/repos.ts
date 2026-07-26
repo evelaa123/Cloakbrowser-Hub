@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import type { AppSettings, Profile, ProxyConfig, SavedProxy } from '../../shared/types';
 import { cryptoId, defaultSettings, newProfile, randomSeed } from '../../shared/defaults';
+import { migrateProfiles } from '../../shared/migrate';
 import { paths, safeId } from './paths';
 import { readJson, writeJson } from './store';
 import { decrypt, encrypt } from './secrets';
@@ -24,6 +25,20 @@ import { decrypt, encrypt } from './secrets';
 interface ProfilesFile {
   version: 1;
   profiles: Profile[];
+}
+
+/** Notes from the last load-time migration, surfaced to the UI on request. */
+let lastMigrationNotes: string[] = [];
+
+/**
+ * What the most recent profile load had to repair.
+ *
+ * Exposed because a silent rewrite of the user's own `profiles.json` is not
+ * acceptable behaviour on its own: if the app changes a setting the user can
+ * see in the editor, the user has to be able to find out that it did.
+ */
+export function profileMigrationNotes(): string[] {
+  return [...lastMigrationNotes];
 }
 
 /**
@@ -62,11 +77,21 @@ export class ProfileRepo {
   load(): void {
     if (this.loaded) return;
     const file = readJson<ProfilesFile>(paths.profilesFile(), { version: 1, profiles: [] });
-    this.profiles = (file.profiles ?? []).map((p) => ({
+
+    // Migrate before use, not lazily on edit. A profile is read at launch time
+    // to build Chromium flags, so a field that is only repaired when the user
+    // happens to open the editor would still be missing on the launch that
+    // matters. This is what made the incognito bug invisible: the editor showed
+    // a populated "Storage quota" default while the launch passed no flag.
+    const { profiles, changed, notes } = migrateProfiles(file.profiles ?? []);
+    this.profiles = profiles.map((p) => ({
       ...p,
       proxy: decodeProxy(p.proxy as StoredProxy<ProxyConfig>),
     }));
+    lastMigrationNotes = notes;
     this.loaded = true;
+    // Persist the upgrade so the repair happens once, not on every start.
+    if (changed) this.flush();
   }
 
   private flush(): void {

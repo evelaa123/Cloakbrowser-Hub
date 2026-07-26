@@ -79,14 +79,40 @@ to authenticate.
 Discover and import existing local profiles from **Chrome, Edge, Brave,
 Chromium, Opera, Vivaldi, Yandex and Firefox**, on all three platforms.
 
+Also **Scan a folder…** and **Import from .zip…** for profiles that did not come
+from a browser installed on this machine — a backup, an external drive, a copy
+from another PC. The scan looks for profile markers rather than a fixed layout,
+so the picked folder can be the profile itself, its `User Data` parent, or an
+archive with a wrapper directory. Archive extraction rejects path-traversal
+("zip slip") entries and symlinks, and caps total expanded size.
+
 ### Sessions
 Launch, stop and stop-all, with live per-session status and a streaming log
 viewer per session.
 
+### Interface
+**Settings → Interface size**, or `Ctrl`/`Cmd` `+` / `-` / `0`, scales the whole
+window (zoom factor, not just font size, so paddings and controls grow with the
+text) and is persisted between runs. The base type scale was also raised — the
+smallest label was 10.5px, which is below comfortable reading size on a 1080p
+laptop.
+
 ### Licensing
 Reflects the upstream `cloakbrowser` tiers (`none` / `free` / `pro`), including
-a GitHub sign-in flow for a free key and a seat-count hint. The patched-Chromium
-binary is downloaded on demand with progress reporting, not bundled.
+a GitHub sign-in flow for a free key. The patched-Chromium binary is downloaded
+on demand with progress reporting, not bundled.
+
+The **concurrent-session limit comes from the plan**, not a free-typed number:
+the plan's seat count is the ceiling and the Settings value is a preference
+underneath it (lowering it is a legitimate choice on a small machine; raising it
+past the entitlement is not, since the browser refuses those sessions anyway).
+When the plan is unknown — no key, or the license server is unreachable — the
+cap is *not* guessed, because blocking a paying user's launches over a network
+blip is worse than allowing one session too many.
+
+Key files are read encoding-tolerantly (UTF-16LE/BE with or without a BOM, UTF-8
+BOM) and repaired in place, because PowerShell writes UTF-16 by default and that
+silently broke both this app and the upstream CLI.
 
 ### Automation API
 An opt-in local HTTP API (Settings → Automation API) for driving profiles from a
@@ -138,7 +164,7 @@ silhouette alone reads better.
 ## Test
 
 ```bash
-npm test        # vitest, 154 tests
+npm test        # vitest, 273 tests
 npm run test:watch
 npm run typecheck
 ```
@@ -279,18 +305,25 @@ rejected from the next request on.
 
 ## Testing
 
-154 tests across 8 files:
+273 tests across 15 files:
 
 | File | Covers |
 |---|---|
 | `proxy.test.ts` | all accepted proxy formats, ambiguous-order disambiguation |
 | `cookies.test.ts` | JSON / Netscape / header parsing, HttpOnly + SameSite repair |
-| `fingerprint-args.test.ts` | fingerprint → argv, locale/timezone coupling |
+| `fingerprint-args.test.ts` | fingerprint → argv, locale/timezone coupling, seed fallback |
 | `automation.test.ts` | the API over real HTTP: auth, every route, start idempotency, port release |
 | `cloakbrowser-api.test.ts` | pins upstream `binaryInfo` / `ensureBinary` signatures against the installed package |
 | `ipc-contract.test.ts` | every declared channel has a handler |
 | `preload-contract.test.ts` | bridge exposes exactly the declared surface |
 | `renderer-smoke.test.tsx` | app shell mounts in jsdom, navigation, launch wiring |
+| `license-key.test.ts` | key file encodings (UTF-16LE/BE, BOMs), normalisation, on-disk repair |
+| `migrate.test.ts` | forward-migration of stored profiles; backfill vs. deliberate choice |
+| `session-limit.test.ts` | plan seats vs. user preference, unknown-plan fallback |
+| `sandbox-args.test.ts` | when `--no-sandbox` is required, and the infobar suppression |
+| `ui-zoom.test.ts` | zoom snapping, stepping, clamping at both ends |
+| `search-engine.test.ts` | one-time seeding decision, `--lang` pin vs. pinned locale |
+| `import-folder.test.ts` | folder layouts, corrupt `Preferences`, zip-slip guard |
 
 The renderer test uses `act()` from `preact/test-utils`. Preact defers
 `useEffect` behind `options.requestAnimationFrame`, which in jsdom is a real
@@ -321,6 +354,55 @@ Worth knowing before relying on this:
   mark with a `HUB` wordmark, and the disc inside the hood is the Google Chrome
   logo, which is a Google trademark. Fine for private and internal use;
   redistributing through an app store may not be.
+- **Only `.zip` profile archives are supported.** `.rar` and `.7z` would need a
+  native dependency; extract those yourself and use *Scan a folder…* instead.
+- **Search-engine seeding drives the settings UI.** It is the only method the
+  binary supports (see below), so it depends on `chrome://settings` internals. If
+  a future build changes them the profile simply keeps no default engine, logged
+  as a warning — it never blocks the launch.
+
+---
+
+## Notes on specific fixes
+
+Things that were reported as bugs and turned out to have non-obvious causes,
+recorded so they are not re-investigated from scratch:
+
+- **"License key is invalid" for a valid key.** PowerShell's `Set-Content` and
+  `>` write UTF-16LE by default, and both the upstream CLI
+  (`dist/license.js` reads with `utf-8`) and this app read the file as UTF-8 —
+  so the key arrived as `\uFFFD\uFFFDc\0b\0…`. The Hub now sniffs the BOM,
+  decodes UTF-16LE/BE, and rewrites the file as UTF-8 so the CLI and the binary
+  work too.
+- **Exit IP / timezone not detected behind a system-wide VPN.** Two causes:
+  `mmdb-lib` is an *optional* peer dependency of `cloakbrowser`, so `geoip: true`
+  threw when it was absent; and geoip had been gated on the profile having a
+  proxy. GeoIP resolves the egress IP through IP-echo services with no proxy at
+  all, which is exactly the system-VPN case. Both fixed; a geoip failure now
+  degrades to a warning instead of aborting the launch.
+- **BrowserScan reporting incognito on a "default" profile.** Not the flag
+  builder and not the default value — `profiles.json` was spread into the app
+  verbatim, so a profile written before `storageQuotaMb` existed had no value and
+  never emitted `--fingerprint-storage-quota`, while the editor displayed the
+  current default. Fixed with a versioned migration (`src/shared/migrate.ts`);
+  the default quota is now 120000 MB, which describes a plausible disk rather
+  than merely clearing the threshold.
+- **The `--no-sandbox` infobar.** The flag is hardcoded in the wrapper's
+  `getDefaultStealthArgs()`, and `buildArgs` deduplicates by flag *key*, so a
+  caller can override a value but never remove a default — `stealthArgs: false`
+  is the only lever. The Hub now supplies the equivalent flags itself and keeps
+  the renderer sandbox enabled wherever the kernel allows it, pairing
+  `--no-sandbox` with `--test-type` only where it is genuinely required. The bar
+  also cost ~40px of `innerHeight`, which was a fingerprint inconsistency on top
+  of being ugly.
+- **No default search engine.** The binary is de-Googled and ships no
+  prepopulated engine. `Default/Preferences` edits fail Chromium's protected-prefs
+  MAC check, the `Web Data` keywords table is overwritten on every startup, and
+  no CLI flag exists — so the only supported route is driving
+  `chrome://settings/searchEngines` once in a persistent profile. Done on first
+  launch per profile, with `--lang=en-US` pinned for a deterministic settings DOM
+  (skipped when the profile pins its own locale, since `--lang` feeds
+  `Accept-Language`).
 
 ---
 

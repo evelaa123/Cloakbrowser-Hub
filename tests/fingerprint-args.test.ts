@@ -27,9 +27,39 @@ describe('buildFingerprintArgs', () => {
     expect(flag(args, '--fingerprint-platform')).toBe('windows');
   });
 
-  it('omits the seed flag when no seed is set (binary rolls a random one)', () => {
+  it('still emits a seed when the field is empty, rather than shipping no fingerprint', () => {
+    // The Hub launches with `stealthArgs: false` so it can drop the wrapper's
+    // hardcoded --no-sandbox. That also means the wrapper's default
+    // `--fingerprint=<random>` no longer applies, so omitting the flag here
+    // would start a browser with no spoofing at all while the UI still showed
+    // the profile as protected.
     const args = buildFingerprintArgs(profile((x) => { x.fingerprint.seed = undefined; }));
-    expect(flag(args, '--fingerprint')).toBeUndefined();
+    const seed = flag(args, '--fingerprint');
+    expect(seed).toBeDefined();
+    expect(Number(seed)).toBeGreaterThan(0);
+  });
+
+  it('derives the fallback seed deterministically, so the device identity is stable', () => {
+    // A seed that re-rolls per launch would make one account look like a
+    // different machine every session — the opposite of what a profile is for.
+    const mk = () => profile((x) => { x.fingerprint.seed = undefined; x.id = 'stable-id'; });
+    expect(flag(buildFingerprintArgs(mk()), '--fingerprint')).toBe(
+      flag(buildFingerprintArgs(mk()), '--fingerprint'),
+    );
+  });
+
+  it('gives different profiles different fallback seeds', () => {
+    const a = buildFingerprintArgs(profile((x) => { x.fingerprint.seed = undefined; x.id = 'aaa'; }));
+    const b = buildFingerprintArgs(profile((x) => { x.fingerprint.seed = undefined; x.id = 'bbb'; }));
+    expect(flag(a, '--fingerprint')).not.toBe(flag(b, '--fingerprint'));
+  });
+
+  it('keeps the fallback seed in the range the wrapper itself uses', () => {
+    for (const id of ['x', 'profile-42', 'a'.repeat(64), '☃']) {
+      const n = Number(flag(buildFingerprintArgs(profile((x) => { x.fingerprint.seed = undefined; x.id = id; })), '--fingerprint'));
+      expect(n).toBeGreaterThanOrEqual(10000);
+      expect(n).toBeLessThanOrEqual(99999);
+    }
   });
 
   it('leaves auto values to the binary instead of guessing them', () => {
@@ -61,7 +91,11 @@ describe('buildFingerprintArgs', () => {
   });
 
   it('raises the storage quota by default so the profile is not read as incognito', () => {
-    expect(flag(buildFingerprintArgs(profile()), '--fingerprint-storage-quota')).toBe('5000');
+    const quota = Number(flag(buildFingerprintArgs(profile()), '--fingerprint-storage-quota'));
+    // Asserted as a range, not an exact number: the point of the flag is to clear
+    // BrowserScan's incognito threshold while still describing a plausible disk,
+    // and pinning the literal would make tuning it a test edit.
+    expect(quota).toBeGreaterThanOrEqual(50000);
   });
 
   it('only sends the noise flag when noise is switched off', () => {
@@ -220,12 +254,21 @@ describe('proxyLabel', () => {
 });
 
 describe('resolveLaunch', () => {
-  it('enables geoip only when ip locale mode is combined with a proxy', () => {
-    expect(resolveLaunch(profile()).geoip).toBe(false);
+  it('enables geoip for ip locale mode with OR without a proxy', () => {
+    // Deliberately not gated on having a proxy. A user on a system-wide VPN has
+    // no per-profile proxy, but their egress IP is still a foreign exit that the
+    // timezone has to match — gating this is what left their sessions reporting
+    // the local timezone behind a Vienna IP.
+    expect(resolveLaunch(profile()).geoip).toBe(true);
     const withProxy = resolveLaunch(
       profile((x) => { x.proxy = { kind: 'http', host: 'p.io', port: 80 }; }),
     );
     expect(withProxy.geoip).toBe(true);
+  });
+
+  it('disables geoip when the locale is pinned manually', () => {
+    const out = resolveLaunch(profile((x) => { x.locale = { mode: 'manual', locale: 'de-AT' }; }));
+    expect(out.geoip).toBe(false);
   });
 
   it('passes pinned locale and timezone to the wrapper options', () => {

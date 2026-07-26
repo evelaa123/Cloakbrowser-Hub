@@ -29,7 +29,10 @@ import type {
 import { resolveLaunch } from '../../shared/fingerprint-args';
 import { loadCookiesInto, saveCookiesFrom } from '../services/cookies';
 import { paths } from '../services/paths';
-import { readSavedKey } from '../services/license';
+import { knownPlanSeats, readSavedKey } from '../services/license';
+import { resolveSessionLimit } from '../../shared/session-limit';
+import { noSandboxOverride, resolveSandboxArgs } from './sandbox-args';
+import { needsSearchEngineSeed, seedGoogleSearch, seedingArgs } from './search-engine';
 import { Profiles, Settings, profileDataDir } from '../services/repos';
 
 /** Options the CloakBrowser wrapper accepts for a persistent context. */
@@ -37,6 +40,12 @@ interface PersistentContextOptions {
   userDataDir: string;
   headless: boolean;
   args: string[];
+  /**
+   * Include the wrapper's own default flag set. We pass `false` and supply the
+   * equivalents ourselves — see the call site for why that is what removes the
+   * hardcoded `--no-sandbox`.
+   */
+  stealthArgs?: boolean;
   proxy?: string | { server: string; bypass?: string; username?: string; password?: string };
   timezone?: string;
   locale?: string;
@@ -204,11 +213,19 @@ export class SessionManager extends EventEmitter {
     if (this.isRunning(profileId)) return { ok: false, error: 'This profile is already running.' };
 
     const settings = Settings.get();
-    const limit = settings.maxConcurrentSessions;
+    // The limit is the lower of the plan's seats and the user's own preference,
+    // and the error has to say which one bound — "raise it in Settings" is
+    // actively misleading advice when the plan is what's capping you.
+    const { limit, cappedByPlan, reason } = resolveSessionLimit(
+      settings.maxConcurrentSessions,
+      knownPlanSeats(),
+    );
     if (limit > 0 && this.runningCount() >= limit) {
       return {
         ok: false,
-        error: `Concurrent session limit reached (${limit}). Close a session or raise the limit in Settings.`,
+        error: cappedByPlan
+          ? `Concurrent session limit reached (${limit}) — that is ${reason}. Close a session, or upgrade your plan for more.`
+          : `Concurrent session limit reached (${limit}) — that is ${reason}. Close a session, or raise the limit in Settings.`,
       };
     }
 
@@ -266,7 +283,6 @@ export class SessionManager extends EventEmitter {
   }
 
   private async launch(profile: Profile, cdpPort?: number): Promise<BrowserContext> {
-    const cloak = (await import('cloakbrowser')) as unknown as CloakBrowserModule;
     const settings = Settings.get();
     const resolved = resolveLaunch(profile);
     const userDataDir = profileDataDir(profile.id);
@@ -287,12 +303,34 @@ export class SessionManager extends EventEmitter {
       return ok;
     });
 
+    // Sandbox: keep it on where the kernel supports it, and suppress the
+    // "unsupported command-line flag" infobar where it has to be off. The bar is
+    // not only ugly — it shifts innerHeight by ~40px, which breaks the viewport
+    // coherence the rest of the fingerprint work is trying to maintain.
+    const sandbox = resolveSandboxArgs(process.platform, { forceNoSandbox: noSandboxOverride() });
+    this.log(profile.id, sandbox.disabled ? 'warn' : 'info', sandbox.reason);
+
     // Bind the DevTools port to loopback explicitly. Chromium's default for
     // --remote-debugging-port is all interfaces on some builds, which would
     // expose every session to the local network.
-    const args = cdpPort
-      ? [...resolved.args, `--remote-debugging-port=${cdpPort}`, '--remote-debugging-address=127.0.0.1']
-      : resolved.args;
+    // First launch of a profile also configures the search engine, which means
+    // driving chrome://settings — a localised UI. Pinning en-US makes that DOM
+    // deterministic, but only when the profile has not pinned its own locale:
+    // overriding a deliberate --lang would change the Accept-Language header the
+    // site sees, and a fingerprint change is a worse problem than an unset
+    // search engine.
+    const seedArgs = needsSearchEngineSeed(profile)
+      ? seedingArgs(profile.locale?.mode === 'manual' && !!profile.locale.locale)
+      : [];
+
+    const args = [
+      ...resolved.args,
+      ...sandbox.args,
+      ...seedArgs,
+      ...(cdpPort
+        ? [`--remote-debugging-port=${cdpPort}`, '--remote-debugging-address=127.0.0.1']
+        : []),
+    ];
 
     // Logged after the CDP flags are appended so the line matches what actually
     // launched — the log is the first thing anyone checks when debugging a
@@ -303,6 +341,20 @@ export class SessionManager extends EventEmitter {
       userDataDir,
       headless: resolved.headless,
       args,
+      // Take over the wrapper's default flag set.
+      //
+      // This is what removes the "You are using an unsupported command-line
+      // flag: --no-sandbox" infobar. The flag is hardcoded in the wrapper's
+      // `getDefaultStealthArgs()`, and `buildArgs` deduplicates by flag *key* —
+      // so passing our own args can override a value but can never delete a
+      // default. `stealthArgs: false` is the only lever that removes it.
+      //
+      // Safe only because `buildFingerprintArgs` already emits the other two
+      // defaults (`--fingerprint=<seed>` and `--fingerprint-platform=<os>`)
+      // from the profile itself, with a *stable* seed rather than the random
+      // one the wrapper rolls per launch. See `sandboxArgs()` for why dropping
+      // --no-sandbox is a security improvement and not just cosmetic.
+      stealthArgs: false,
       geoip: resolved.geoip,
       humanize: resolved.humanize,
       humanPreset: resolved.humanPreset,
@@ -322,7 +374,7 @@ export class SessionManager extends EventEmitter {
     if (settings.browserVersion) options.browserVersion = settings.browserVersion;
     if (settings.releaseChannel) options.releaseChannel = settings.releaseChannel;
 
-    const context = await cloak.launchPersistentContext(options);
+    const context = await this.launchWithGeoipFallback(profile, options);
 
     // Inject the saved cookie jar before any navigation happens.
     const jar = paths.cookieJar(profile.id);
@@ -351,8 +403,70 @@ export class SessionManager extends EventEmitter {
       void this.handleUnexpectedClose(profile.id);
     });
 
+    await this.seedSearchEngineOnce(context, profile);
+
     await this.openStartPages(context, profile);
     return context;
+  }
+
+  /**
+   * Give a new profile a working address bar, once.
+   *
+   * The binary is de-Googled and ships no prepopulated search engine, so a fresh
+   * profile cannot search from the omnibox at all. The only supported fix is to
+   * drive the settings UI in a persistent profile — see `search-engine.ts` for
+   * why editing Preferences or Web Data does not work.
+   *
+   * Non-fatal by construction: a failure leaves the user with no default engine,
+   * which is an annoyance. Failing the launch over it would be worse, so the
+   * outcome is logged either way and the flag is only set on success — a failed
+   * attempt should be retried on the next start, not silently given up on.
+   */
+  private async seedSearchEngineOnce(context: BrowserContext, profile: Profile): Promise<void> {
+    if (!needsSearchEngineSeed(profile)) return;
+
+    const result = await seedGoogleSearch(context);
+    this.log(profile.id, result.ok ? 'info' : 'warn', result.message);
+    if (result.ok) Profiles.update(profile.id, { searchEngineSeeded: true });
+  }
+
+  /**
+   * Launch, degrading gracefully when GeoIP cannot run.
+   *
+   * `geoip: true` makes the wrapper import `mmdb-lib`, which is an *optional*
+   * peer dependency: when it is absent the wrapper throws
+   * "mmdb-lib is required for geoip: true" and the whole launch fails. The
+   * GeoIP database is also a ~70 MB download on first use, so it can fail on a
+   * slow or filtered connection.
+   *
+   * Neither is a reason to refuse to open the browser. Timezone matching is a
+   * quality-of-fingerprint concern; not launching at all is strictly worse than
+   * launching with the machine's timezone and telling the user. So the failure
+   * is retried once with geoip off, and the reason is logged loudly rather than
+   * swallowed — a silently unmatched timezone is exactly the kind of drift that
+   * gets an account flagged.
+   */
+  private async launchWithGeoipFallback(
+    profile: Profile,
+    options: PersistentContextOptions,
+  ): Promise<BrowserContext> {
+    const cloak = (await import('cloakbrowser')) as unknown as CloakBrowserModule;
+    try {
+      return await cloak.launchPersistentContext(options);
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      const geoipFailed = options.geoip === true && /mmdb-lib|geoip/i.test(msg);
+      if (!geoipFailed) throw e;
+
+      this.log(
+        profile.id,
+        'warn',
+        `Could not resolve timezone/locale from the exit IP (${msg.split('\n')[0]}). ` +
+          'Starting with this machine’s timezone instead — set the timezone manually in the profile ' +
+          'if the exit IP is in another country.',
+      );
+      return cloak.launchPersistentContext({ ...options, geoip: false });
+    }
   }
 
   private async openStartPages(context: BrowserContext, profile: Profile): Promise<void> {

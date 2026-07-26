@@ -9,6 +9,8 @@
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 import type { AppSettings, FingerprintPlatform } from '../../shared/types';
+import { preferenceMax, resolveSessionLimit } from '../../shared/session-limit';
+import { DEFAULT_ZOOM, ZOOM_STEPS, snapZoom, zoomLabel } from '../../shared/ui-zoom';
 import { useHub } from '../state';
 import { useToast } from '../components/toast';
 import { Callout, Card, Check, Field } from '../components/ui';
@@ -21,6 +23,10 @@ export function SettingsPage(): JSX.Element {
 
   const settings = hub.settings;
   if (!settings) return <div class="content">Loading…</div>;
+
+  // Same resolver the session manager enforces with, so the number shown here
+  // and the number that actually binds at launch can never disagree.
+  const sessionLimit = resolveSessionLimit(settings.maxConcurrentSessions, hub.license?.seatHint);
 
   const set = (patch: Partial<AppSettings>): void => {
     void toast.run(() => hub.saveSettings(patch));
@@ -42,18 +48,37 @@ export function SettingsPage(): JSX.Element {
 
       <div class="content">
         <Card title="Appearance">
-          <Field label="Theme">
-            <select
-              style={{ maxWidth: 240 }}
-              value={settings.theme}
-              onChange={(e) =>
-                set({ theme: (e.currentTarget as HTMLSelectElement).value as 'dark' | 'light' })
-              }
+          <div class="grid2">
+            <Field label="Theme">
+              <select
+                value={settings.theme}
+                onChange={(e) =>
+                  set({ theme: (e.currentTarget as HTMLSelectElement).value as 'dark' | 'light' })
+                }
+              >
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </Field>
+            <Field
+              label="Interface size"
+              hint="Scales the whole interface, not just the text. Ctrl/⌘ with + − 0 also works."
             >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </Field>
+              <select
+                value={String(snapZoom(settings.uiZoom))}
+                onChange={(e) =>
+                  set({ uiZoom: Number.parseFloat((e.currentTarget as HTMLSelectElement).value) })
+                }
+              >
+                {ZOOM_STEPS.map((z) => (
+                  <option key={z} value={String(z)}>
+                    {zoomLabel(z)}
+                    {z === DEFAULT_ZOOM ? ' (default)' : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
         </Card>
 
         <Card
@@ -64,19 +89,39 @@ export function SettingsPage(): JSX.Element {
             <Field
               label="Maximum concurrent sessions"
               hint={
-                hub.license?.seatHint != null
-                  ? `Your plan allows ${hub.license.seatHint}. Setting a higher number here does not raise the limit the browser enforces.`
-                  : 'A soft guard so a stray click cannot open fifty browsers at once.'
+                sessionLimit.planSeats != null
+                  ? sessionLimit.cappedByPlan
+                    ? `Your plan allows ${sessionLimit.planSeats}, so ${sessionLimit.limit} is what gets enforced. Lower it here if your machine cannot handle that many.`
+                    : `Your plan allows ${sessionLimit.planSeats}. You can lower this, but not raise it past your plan.`
+                  : 'Your plan’s seat count is not known yet (no key, or the license server is unreachable), so this number is used as-is.'
               }
             >
               <input
                 type="number"
                 min={1}
-                max={500}
+                // Bounded by the plan rather than a flat 500: typing a number the
+                // browser will refuse anyway turns an upgrade decision into a
+                // launch-time error message.
+                max={preferenceMax(sessionLimit.planSeats)}
                 value={settings.maxConcurrentSessions}
                 onChange={(e) => {
-                  const n = Number.parseInt((e.currentTarget as HTMLInputElement).value, 10);
-                  if (Number.isFinite(n) && n >= 1) set({ maxConcurrentSessions: n });
+                  const el = e.currentTarget as HTMLInputElement;
+                  const n = Number.parseInt(el.value, 10);
+                  if (!Number.isFinite(n) || n < 1) return;
+                  const cap = preferenceMax(sessionLimit.planSeats);
+                  if (n > cap) {
+                    // Snap back visibly and say why, instead of accepting a value
+                    // that silently means something else at launch time.
+                    el.value = String(cap);
+                    set({ maxConcurrentSessions: cap });
+                    toast.info(
+                      sessionLimit.planSeats != null
+                        ? `Your plan allows ${sessionLimit.planSeats} concurrent sessions, so the limit was set to ${cap}.`
+                        : `The maximum is ${cap}.`,
+                    );
+                    return;
+                  }
+                  set({ maxConcurrentSessions: n });
                 }}
               />
             </Field>

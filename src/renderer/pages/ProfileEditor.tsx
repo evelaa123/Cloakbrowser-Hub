@@ -516,12 +516,12 @@ export function ProfileEditor(props: { profile: Profile; onClose: () => void }):
             <div class="grid2">
               <Field
                 label="Storage quota (MB)"
-                hint="Incognito windows report a small quota. 5000 looks like a normal profile."
+                hint="Blank lets the binary normalise it — which BrowserScan reads as incognito. 120000 ≈ a normal 256 GB disk."
               >
                 <input
                   type="number"
                   value={fp.storageQuotaMb ?? ''}
-                  placeholder="binary default"
+                  placeholder="binary default (detected as incognito)"
                   onInput={(e) =>
                     patchFp({ storageQuotaMb: intOrUndef((e.currentTarget as HTMLInputElement).value) })
                   }
