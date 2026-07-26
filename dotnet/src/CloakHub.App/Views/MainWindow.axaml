@@ -1,0 +1,141 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CloakHub.App.ViewModels"
+        xmlns:views="using:CloakHub.App.Views"
+        mc:Ignorable="d"
+        x:Class="CloakHub.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="CloakBrowser Hub"
+        Width="1180" Height="760"
+        MinWidth="880" MinHeight="560"
+        Background="{DynamicResource BgBrush}">
+
+  <!--
+    A two-column grid rather than a DockPanel. The sidebar is a fixed width taken
+    from the palette (the CSS sidebar-w token), and a Grid states that directly; a
+    DockPanel would need the width set on the child and reads less like the layout
+    it produces.
+  -->
+  <Grid ColumnDefinitions="Auto,*">
+
+    <!-- ================================================================
+         Sidebar
+         ================================================================ -->
+    <Border Grid.Column="0" Classes="sidebar" Width="{DynamicResource SidebarWidth}">
+      <Grid RowDefinitions="Auto,*,Auto" Margin="12">
+
+        <!-- Brand -->
+        <StackPanel Grid.Row="0" Margin="4,6,4,18" Spacing="2">
+          <TextBlock Text="CloakBrowser" FontSize="15" FontWeight="SemiBold" />
+          <TextBlock Text="Hub" Classes="faint" FontSize="15" FontWeight="SemiBold" />
+        </StackPanel>
+
+        <!-- Navigation -->
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding NavItems}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavItem">
+              <!--
+                Classes.active binds the styling to the view model's flag, which is
+                how the CSS class was toggled. Doing it here rather than in code
+                keeps "which row looks selected" and "which route is current" the
+                same fact.
+              -->
+              <Button Classes="nav-item"
+                      Classes.active="{Binding IsActive}"
+                      Margin="0,0,0,2"
+                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NavigateCommand}"
+                      CommandParameter="{Binding Route}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Text="{Binding Glyph}" Width="16" TextAlignment="Center" />
+                  <TextBlock Text="{Binding Label}" />
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Footer: licence, platform, version -->
+        <StackPanel Grid.Row="2" Spacing="8" Margin="4,12,4,4">
+          <Border Classes="badge" Classes.ok="{Binding HasLicenseKey}"
+                  HorizontalAlignment="Left">
+            <TextBlock Text="{Binding TierLabel}" />
+          </Border>
+          <TextBlock Text="{Binding PlatformLabel}" Classes="faint"
+                     FontSize="{DynamicResource FontSizeTiny}" />
+          <TextBlock Text="{Binding VersionLabel}" Classes="faint mono"
+                     FontSize="{DynamicResource FontSizeTiny}" />
+        </StackPanel>
+
+      </Grid>
+    </Border>
+
+    <!-- ================================================================
+         Main area, with the toast layer floating over it
+         ================================================================ -->
+    <Panel Grid.Column="1">
+
+      <!--
+        All five screens are present and toggled by IsVisible rather than swapped
+        through a ContentControl. Each keeps its scroll position and any half-typed
+        input when the user navigates away and back, which a ContentControl would
+        discard by rebuilding the view.
+      -->
+      <views:ProfilesView DataContext="{Binding ProfilesPage}"
+                          IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsProfiles}" />
+
+      <views:SettingsView DataContext="{Binding SettingsPage}"
+                          IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsSettings}" />
+
+      <!--
+        Proxies, Import and Licence are placeholders. They say so explicitly rather
+        than showing an empty pane, because a blank screen is indistinguishable from
+        a page that failed to load.
+      -->
+      <views:PlaceholderView IsVisible="{Binding IsProxies}"
+                             Heading="Proxies"
+                             Subheading="Shared proxy library"
+                             Detail="The proxy library, parser and checker have not been ported yet. Per-profile proxies already work — set one in the profile editor." />
+
+      <views:PlaceholderView IsVisible="{Binding IsImport}"
+                             Heading="Import"
+                             Subheading="Bring profiles in from elsewhere"
+                             Detail="Importers for Chrome, Firefox and other anti-detect browsers have not been ported yet." />
+
+      <views:PlaceholderView IsVisible="{Binding IsLicense}"
+                             Heading="License"
+                             Subheading="Activation and seats"
+                             Detail="Activation has not been ported yet. Without a key the session limit falls back to your own preference rather than being blocked." />
+
+      <!-- Toasts: bottom-right, above everything, not hit-testable except the close button. -->
+      <ItemsControl ItemsSource="{Binding Toasts.Items}"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,20,20">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:Toast">
+            <Border Classes="callout"
+                    Classes.warn="{Binding IsWarning}"
+                    Classes.err="{Binding IsError}"
+                    Margin="0,8,0,0" MaxWidth="420"
+                    Background="{DynamicResource BgElevatedBrush}"
+                    BoxShadow="0 6 20 0 #73000000">
+              <Grid ColumnDefinitions="*,Auto">
+                <!-- Wraps, because these carry sentences: a quarantine notice names a file. -->
+                <TextBlock Grid.Column="0" Text="{Binding Message}"
+                           TextWrapping="Wrap" VerticalAlignment="Center"
+                           FontSize="{DynamicResource FontSizeSmall}" />
+                <Button Grid.Column="1" Classes="ghost" Content="✕"
+                        Margin="10,0,0,0" VerticalAlignment="Top"
+                        FontSize="{DynamicResource FontSizeTiny}"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Toasts.DismissCommand}"
+                        CommandParameter="{Binding}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+    </Panel>
+  </Grid>
+</Window>

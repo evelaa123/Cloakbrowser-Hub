@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:views="using:CloakHub.App.Views"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.PlaceholderView"
+             x:DataType="views:PlaceholderView">
+
+  <!--
+    A screen that is deliberately not built yet.
+
+    It names what is missing instead of showing nothing, because an empty pane looks
+    identical to a page that threw while loading, and the user cannot tell which,
+    so they file the working case as a bug and ignore the broken one.
+
+    Bindings target the control itself (x:DataType above), so the three strings are
+    set as properties in the parent's XAML rather than needing a view model each.
+  -->
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Topbar, matching the other screens so navigation does not shift the header. -->
+    <Border Grid.Row="0" Padding="22,18"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Spacing="3">
+        <TextBlock Classes="h1" Text="{Binding Heading, RelativeSource={RelativeSource AncestorType=views:PlaceholderView}}" />
+        <TextBlock Classes="sub" Text="{Binding Subheading, RelativeSource={RelativeSource AncestorType=views:PlaceholderView}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Grid.Row="1" Classes="card" Margin="22" Padding="22"
+            VerticalAlignment="Top">
+      <StackPanel Spacing="10" MaxWidth="560">
+        <TextBlock Text="Not ported yet" FontWeight="SemiBold" />
+        <TextBlock Classes="dim" TextWrapping="Wrap"
+                   Text="{Binding Detail, RelativeSource={RelativeSource AncestorType=views:PlaceholderView}}" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</UserControl>

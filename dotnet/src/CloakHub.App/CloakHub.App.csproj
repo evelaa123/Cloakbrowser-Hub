@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <AvaloniaNameGeneratorIsEnabled>true</AvaloniaNameGeneratorIsEnabled>
+
+    <!--
+      Compiled bindings for every view. Without this, a binding to a property that
+      does not exist fails silently at runtime and shows an empty field, which is
+      the single easiest way to ship a broken screen: the XAML looks right and the
+      app starts. With it, the same mistake is a build error.
+
+      This is why every view declares x:DataType: the compiler needs the target
+      type to resolve paths against.
+    -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>CloakBrowserHub</AssemblyName>
+    <RootNamespace>CloakHub.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      11.3.x rather than 12.1.0. Avalonia 12 does target net8.0, but it is only
+      weeks old and this project's whole point is running correctly on Windows and
+      macOS, which cannot be verified from this Linux sandbox. The mature 11.3 line
+      is the safer base for a port whose cross-platform behaviour has to be trusted
+      before it can be tested.
+    -->
+    <PackageReference Include="Avalonia" Version="11.3.18" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.18" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.18" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.18" />
+
+    <!-- Compiled bindings need this to report binding errors at build time. -->
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.18" Condition="'$(Configuration)' == 'Debug'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CloakHub.Core\CloakHub.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

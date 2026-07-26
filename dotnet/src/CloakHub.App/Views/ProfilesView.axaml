@@ -1,0 +1,177 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CloakHub.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.ProfilesView"
+             x:DataType="vm:ProfilesPageViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- ================================================================
+         Topbar: title, count, search, create
+         ================================================================ -->
+    <Border Grid.Row="0" Padding="22,18"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+
+        <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+          <TextBlock Classes="h1" Text="Profiles" />
+          <TextBlock Classes="sub" Text="{Binding CountLabel}" />
+        </StackPanel>
+
+        <TextBox Grid.Column="1" Width="240" Margin="12,0"
+                 VerticalAlignment="Center"
+                 Watermark="Search name, tag, proxy…"
+                 Text="{Binding Query, Mode=TwoWay}" />
+
+        <Button Grid.Column="2" Classes="primary" Content="New profile"
+                VerticalAlignment="Center"
+                Command="{Binding CreateCommand}" />
+      </Grid>
+    </Border>
+
+    <!-- ================================================================
+         Body
+         ================================================================ -->
+    <Panel Grid.Row="1">
+
+      <!--
+        Two distinct empty states. "No profiles at all" needs a call to action; "none
+        matched your search" needs the search term back, because the two look the
+        same on screen but call for opposite responses from the user.
+      -->
+      <Border Classes="card" Margin="22" VerticalAlignment="Top" Padding="22"
+              IsVisible="{Binding IsEmpty}">
+        <StackPanel Spacing="10" MaxWidth="520">
+          <TextBlock Text="No profiles yet" FontWeight="SemiBold" />
+          <TextBlock Classes="dim" TextWrapping="Wrap"
+                     Text="Each profile is a separate browsing identity — its own fingerprint, cookies and proxy. Create one to get started." />
+          <Button Classes="primary" Content="New profile" HorizontalAlignment="Left"
+                  Margin="0,4,0,0" Command="{Binding CreateCommand}" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" Margin="22" VerticalAlignment="Top" Padding="22"
+              IsVisible="{Binding HasNoMatches}">
+        <StackPanel Spacing="6">
+          <TextBlock Text="Nothing matched" FontWeight="SemiBold" />
+          <TextBlock Classes="dim" TextWrapping="Wrap"
+                     Text="No profile matched that search. It looks at names, notes, tags, proxy hosts and platforms." />
+        </StackPanel>
+      </Border>
+
+      <!-- The table -->
+      <Grid RowDefinitions="Auto,*" Margin="22,16,22,22">
+        <Grid.IsVisible>
+          <!--
+            Hidden when either empty state is showing. Expressed as a binding on the
+            row count rather than as "not IsEmpty and not HasNoMatches", which would
+            need two converters to say the same thing.
+          -->
+          <Binding Path="Rows.Count" Converter="{x:Static vm:Converters.GreaterThanZero}" />
+        </Grid.IsVisible>
+
+        <!--
+          The header and the rows must use identical column definitions, and the
+          actions column has an explicit width rather than Auto for exactly that
+          reason: Auto measures its content, the header cell for that column is
+          empty, so it resolved to 0 in the header and ~180px in the rows. That left
+          the proportional columns a different amount of space in each and the
+          headers sat visibly off from the data they labelled.
+
+          A DataGrid would give real column synchronisation, but it also brings its
+          own theme, selection model and editing behaviour that would fight the
+          CSS-derived styling for no benefit at six columns.
+        -->
+        <Border Grid.Row="0" Padding="12,0,12,8">
+          <Grid ColumnDefinitions="4,1.8*,100,1.8*,90,100,250">
+            <TextBlock Grid.Column="1" Classes="th" Text="NAME" />
+            <TextBlock Grid.Column="2" Classes="th" Text="STATUS" />
+            <TextBlock Grid.Column="3" Classes="th" Text="PROXY" />
+            <TextBlock Grid.Column="4" Classes="th" Text="PLATFORM" />
+            <TextBlock Grid.Column="5" Classes="th" Text="LAST USED" />
+          </Grid>
+        </Border>
+
+        <ListBox Grid.Row="1" ItemsSource="{Binding Rows}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ProfileRowViewModel">
+              <Border Padding="12,9" Margin="0,0,0,2"
+                      BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                <!-- Must match the header definition above exactly. -->
+                <Grid ColumnDefinitions="4,1.8*,100,1.8*,90,100,250">
+
+                  <!-- Accent swatch: a fixed-width bar, so the column never goes ragged. -->
+                  <Border Grid.Column="0" Width="3" CornerRadius="2"
+                          Background="{Binding ColourHex}" Margin="0,1,0,1" />
+
+                  <!-- Name, with tags underneath when present. -->
+                  <StackPanel Grid.Column="1" Spacing="2" Margin="12,0,8,0"
+                              VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                      <TextBlock Text="{Binding Name}" FontWeight="Medium"
+                                 TextTrimming="CharacterEllipsis" />
+                      <!-- The live instance number, matching the badge on the window. -->
+                      <TextBlock Text="{Binding InstanceLabel}" Classes="faint mono"
+                                 FontSize="{DynamicResource FontSizeTiny}"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding IsRunning}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding TagsLabel}" Classes="faint"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding HasTags}" />
+                  </StackPanel>
+
+                  <Border Grid.Column="2" Classes="badge" Classes.ok="{Binding IsRunning}"
+                          HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding StatusLabel}" />
+                  </Border>
+
+                  <TextBlock Grid.Column="3" Text="{Binding ProxyLabel}"
+                             Classes="mono" Margin="0,0,8,0"
+                             Classes.faint="{Binding !HasProxy}"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" />
+
+                  <TextBlock Grid.Column="4" Text="{Binding PlatformLabel}"
+                             Classes="dim" FontSize="{DynamicResource FontSizeSmall}"
+                             VerticalAlignment="Center" />
+
+                  <TextBlock Grid.Column="5" Text="{Binding LastUsedLabel}"
+                             Classes="dim" FontSize="{DynamicResource FontSizeSmall}"
+                             VerticalAlignment="Center" />
+
+                  <!-- Row actions -->
+                  <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="4"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center">
+                    <Button Classes="primary" Content="Start" Padding="12,4"
+                            FontSize="{DynamicResource FontSizeSmall}"
+                            IsVisible="{Binding IsStopped}"
+                            Command="{Binding StartCommand}" />
+                    <Button Content="Stop" Padding="12,4"
+                            FontSize="{DynamicResource FontSizeSmall}"
+                            IsVisible="{Binding IsRunning}"
+                            Command="{Binding StopCommand}" />
+                    <Button Classes="ghost" Content="Duplicate"
+                            FontSize="{DynamicResource FontSizeSmall}"
+                            Command="{Binding DuplicateCommand}" />
+                    <Button Classes="ghost danger" Content="Delete"
+                            FontSize="{DynamicResource FontSizeSmall}"
+                            Command="{Binding DeleteCommand}" />
+                  </StackPanel>
+
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+
+    </Panel>
+  </Grid>
+</UserControl>

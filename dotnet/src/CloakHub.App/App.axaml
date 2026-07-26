@@ -1,0 +1,58 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="CloakHub.App.App"
+             RequestedThemeVariant="Dark">
+
+  <!--
+    Resources before Styles, and every palette token referenced with
+    DynamicResource rather than StaticResource.
+
+    Both are needed, and the second is the one that actually matters. A StyleInclude
+    builds its target as a standalone Styles object, so a StaticResource inside
+    Controls.axaml has no parent scope to search and cannot see this dictionary no
+    matter what order the blocks appear in. It throws "Static resource
+    'FontSizeNormal' not found" during Application.Initialize, before any window
+    exists, which on Windows means a double-clicked exe vanishes with no message.
+    DynamicResource defers the lookup until the style is applied, by which point the
+    control is in the tree and the application-level dictionary is reachable.
+
+    Keeping Resources first as well costs nothing and removes the ordering question
+    entirely.
+  -->
+  <Application.Resources>
+    <!--
+      Wrapped in a ResourceDictionary with MergedDictionaries rather than assigning
+      the include directly. Application.Resources is an IResourceDictionary, which
+      accepts key/value pairs; a ResourceInclude is neither, so it has to be merged
+      in rather than added.
+    -->
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://CloakBrowserHub/Themes/Palette.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <!--
+      Fluent as the base, then overridden. Starting from a bare ControlTheme would
+      mean hand-writing templates for every scrollbar, combo box and text box just
+      to reach parity with the Electron build, which the browser gave for free.
+    -->
+    <FluentTheme />
+
+    <!--
+      Inter itself is registered in Program.cs via WithInterFont(), not with a
+      StyleInclude: the package ships font assets and a FontManager option, not a
+      style resource, so including it as one fails to resolve.
+
+      It is bundled at all because the CSS font stack resolved to a different face
+      per platform (-apple-system, Segoe UI, Roboto), which is right for a web app
+      that should look native but wrong here: the sidebar and table column widths
+      were tuned against specific metrics, and a substituted face changes them per
+      OS. One embedded face makes all three platforms identical.
+    -->
+    <StyleInclude Source="avares://CloakBrowserHub/Themes/Controls.axaml" />
+  </Application.Styles>
+
+</Application>
