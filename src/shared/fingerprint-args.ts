@@ -30,6 +30,22 @@ import type { Profile } from './types';
 /** Flags the app always owns — a user-supplied duplicate is overridden. */
 const OWNED_PREFIXES = ['--fingerprint', '--lang'];
 
+/**
+ * Stable fallback seed for a profile whose seed field was left empty.
+ *
+ * FNV-1a over the profile id, mapped into the 10000-99999 range the wrapper
+ * itself uses. Deterministic so the same profile keeps the same device identity
+ * across launches and across app restarts, without persisting anything.
+ */
+export function seedFromId(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return 10000 + (h % 90000);
+}
+
 export interface ResolvedLaunch {
   /** Chromium CLI flags (deduplicated, deterministic order). */
   args: string[];
@@ -87,9 +103,25 @@ export function buildFingerprintArgs(profile: Profile): string[] {
     flags.set(flag, value === undefined ? flag : `${flag}=${value}`);
   };
 
-  if (typeof fp.seed === 'number' && Number.isFinite(fp.seed) && fp.seed > 0) {
-    set('--fingerprint', Math.floor(fp.seed));
-  }
+  // A seed is always emitted, never omitted.
+  //
+  // Previously an empty seed field meant "no --fingerprint flag", relying on the
+  // wrapper's default args to supply a random one. The Hub now launches with
+  // `stealthArgs: false` (so it can drop the wrapper's hardcoded --no-sandbox),
+  // which means those defaults no longer apply: omitting the flag here would
+  // launch a browser with *no fingerprint spoofing whatsoever* while the UI
+  // still described the profile as protected.
+  //
+  // The fallback is derived from the profile id rather than randomised, for two
+  // reasons: this module must stay pure so the renderer's "resolved flags" panel
+  // shows exactly what will launch (a random value would change on every
+  // re-render), and a stable seed is what a profile is *for* — a device identity
+  // that re-rolls every launch makes one account look like many machines.
+  const seed =
+    typeof fp.seed === 'number' && Number.isFinite(fp.seed) && fp.seed > 0
+      ? Math.floor(fp.seed)
+      : seedFromId(profile.id);
+  set('--fingerprint', seed);
   set('--fingerprint-platform', fp.platform);
   if (fp.platformVersion) set('--fingerprint-platform-version', fp.platformVersion);
   if (fp.brand && fp.brand !== 'Chrome') set('--fingerprint-brand', fp.brand);
@@ -164,7 +196,6 @@ export function buildFingerprintArgs(profile: Profile): string[] {
 /** Build the full set of options for `launchPersistentContext()`. */
 export function resolveLaunch(profile: Profile): ResolvedLaunch {
   const usesIpLocale = profile.locale?.mode === 'ip';
-  const hasProxy = !!(profile.proxy?.kind && profile.proxy.kind !== 'none' && profile.proxy.host);
 
   const humanConfig: Record<string, unknown> = {};
   if (typeof profile.behaviour?.mistypeChance === 'number') {
@@ -179,9 +210,21 @@ export function resolveLaunch(profile: Profile): ResolvedLaunch {
 
   return {
     args: buildFingerprintArgs(profile),
-    // geoip only makes sense behind a proxy; without one the wrapper would
-    // resolve the host's own IP, which is not what "follow the proxy" means.
-    geoip: usesIpLocale && hasProxy,
+    // geoip is NOT gated on having a proxy.
+    //
+    // It used to be, on the assumption that without a proxy the wrapper would
+    // resolve "the host's own IP" and that this was useless. That was wrong, and
+    // it produced a real bug: a user running a system-wide VPN saw their
+    // timezone and locale left unset, because the profile had no proxy and so
+    // geoip never ran — even though the egress IP was exactly the VPN exit that
+    // needed matching.
+    //
+    // The wrapper resolves the egress IP through IP-echo services with no proxy,
+    // which is precisely the IP the site will see: a system VPN, a corporate
+    // gateway, or a plain home connection. Skipping that means the session keeps
+    // the machine's local timezone while presenting a foreign IP — the exact
+    // mismatch this setting exists to prevent.
+    geoip: usesIpLocale,
     timezone: profile.locale?.mode === 'manual' ? profile.locale.timezone : undefined,
     locale: profile.locale?.mode === 'manual' ? profile.locale.locale : undefined,
     headless: profile.startup?.headless ?? false,

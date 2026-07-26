@@ -57,6 +57,12 @@ export const IPC = {
   // Import
   IMPORT_DISCOVER: 'import:discover',
   IMPORT_BROWSER_PROFILE: 'import:browserProfile',
+  /** Pick a folder and scan it for profiles (backups, external drives, copies). */
+  IMPORT_SCAN_FOLDER: 'import:scanFolder',
+  /** Pick a .zip, unpack it to temp and scan the result. */
+  IMPORT_SCAN_ARCHIVE: 'import:scanArchive',
+  /** Delete a temp extraction directory once the user is done with it. */
+  IMPORT_CLEANUP: 'import:cleanup',
 
   // Automation API
   AUTOMATION_STATE: 'automation:state',

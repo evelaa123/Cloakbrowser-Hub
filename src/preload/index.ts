@@ -22,6 +22,7 @@ import type {
   BinaryState,
   CookieValidation,
   DiscoveredBrowserProfile,
+  FolderScan,
   LicenseState,
   Profile,
   ProfileRow,
@@ -161,6 +162,12 @@ const api = {
       copyData: boolean;
     }): Promise<{ profileId: string; copied: number; skipped: number; warning?: string }> =>
       call(IPC.IMPORT_BROWSER_PROFILE, req),
+    /** Scan a folder. Omit `dir` to open a folder picker. */
+    scanFolder: (dir?: string): Promise<FolderScan> => call(IPC.IMPORT_SCAN_FOLDER, dir),
+    /** Unpack a .zip and scan it. Omit `file` to open a file picker. */
+    scanArchive: (file?: string): Promise<FolderScan> => call(IPC.IMPORT_SCAN_ARCHIVE, file),
+    /** Release the temp directory an archive was unpacked into. */
+    cleanup: (dir: string): Promise<void> => call(IPC.IMPORT_CLEANUP, dir),
   },
 
   settings: {

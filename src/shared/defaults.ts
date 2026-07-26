@@ -18,6 +18,7 @@ import type {
   ProxyConfig,
   StartupConfig,
 } from './types';
+import { DEFAULT_ZOOM } from './ui-zoom';
 
 // ---------------------------------------------------------------------------
 // Pools
@@ -153,6 +154,32 @@ export const PROFILE_COLORS = [
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Storage quota (MB) presented to `navigator.storage.estimate()`.
+ *
+ * The binary normalises quota when `--fingerprint` is set, and the normalised
+ * value is small enough that quota-based heuristics (BrowserScan's incognito
+ * check, −10%) read the session as a private window. Overriding it is the
+ * documented remedy.
+ *
+ * 120000 MB (~120 GB) rather than a token bump: real Chrome grants roughly 60%
+ * of free disk space, so a machine with a 256 GB SSD reports a six-figure MB
+ * quota. A value like 5000 clears the incognito threshold but describes a disk
+ * almost nobody has, which trades one anomaly for another.
+ */
+export const DEFAULT_STORAGE_QUOTA_MB = 120000;
+
+/**
+ * Current profile schema version. Lives here rather than in `migrate.ts` so
+ * `newProfile()` can stamp it without importing the migration module, which
+ * imports this one.
+ *
+ *  1 — original shape.
+ *  2 — `storageQuotaMb` backfilled: profiles predating the default launched
+ *      without `--fingerprint-storage-quota` and were flagged as incognito.
+ */
+export const PROFILE_SCHEMA_VERSION = 2;
+
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
@@ -179,9 +206,7 @@ export function defaultFingerprint(platform: FingerprintPlatform = 'windows'): F
     gpu: { mode: 'auto' },
     cpuCores: { mode: 'auto' },
     deviceMemory: { mode: 'auto' },
-    // 5000 MB presents as a regular (non-incognito) profile; the binary's
-    // normalised default reads as incognito to quota-based detectors.
-    storageQuotaMb: 5000,
+    storageQuotaMb: DEFAULT_STORAGE_QUOTA_MB,
     noise: true,
     windowsFontMetrics: false,
     fontsDir: undefined,
@@ -236,6 +261,7 @@ export function defaultSettings(): AppSettings {
     saveCookiesOnClose: true,
     closeSessionsOnQuit: true,
     theme: 'dark',
+    uiZoom: DEFAULT_ZOOM,
     defaultPlatform: 'windows',
     automation: defaultAutomation(),
   };
@@ -286,6 +312,7 @@ export function newProfile(
     geo: defaultGeo(),
     behaviour: defaultBehaviour(),
     startup: defaultStartup(),
+    schemaVersion: PROFILE_SCHEMA_VERSION,
   };
 }
 

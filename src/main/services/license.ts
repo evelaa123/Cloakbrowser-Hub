@@ -44,30 +44,132 @@ export function licenseKeyFile(): string {
   return path.join(cloakCacheDir(), 'license.key');
 }
 
+/**
+ * Decode a license-key file into text.
+ *
+ * Read as bytes and sniffed rather than assumed UTF-8, because the file is very
+ * often *not* written by us. `Set-Content` in Windows PowerShell 5.1 defaults to
+ * UTF-16LE, so `... > license.key` produces a UTF-16 file with a BOM. Decoding
+ * that as UTF-8 yields a key with a U+FFFD replacement char followed by every
+ * character separated by NULs — which still passes an `if (key)` check and gets
+ * sent to the server, where it is rejected as invalid. The user sees "invalid or
+ * expired" for a key that is perfectly good, with no hint that an encoding is to
+ * blame. Sniffing the BOM is the only way to tell these apart.
+ */
+function decodeKeyFile(buf: Buffer): string {
+  if (buf.length >= 2) {
+    // UTF-16LE / UTF-16BE BOM. Node cannot decode BE directly, so the bytes are
+    // swapped into LE first.
+    if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+    if (buf[0] === 0xfe && buf[1] === 0xff) return buf.subarray(2).swap16().toString('utf16le');
+  }
+  // UTF-8 BOM: harmless-looking, but the U+FEFF survives .trim() and would be
+  // sent as part of the key.
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    return buf.subarray(3).toString('utf-8');
+  }
+  // No BOM, but NUL bytes at odd offsets mean UTF-16LE written without one —
+  // `printf '%s' key | iconv -t UTF-16LE` and some editors do exactly this.
+  if (buf.length >= 4 && buf[1] === 0x00 && buf[3] === 0x00) {
+    return buf.toString('utf16le');
+  }
+  return buf.toString('utf-8');
+}
+
+/**
+ * Normalise a pasted or file-read key.
+ *
+ * Exported so activation and file reads cannot disagree about what counts as the
+ * same key: a value that works when pasted must also work after being saved and
+ * read back.
+ *
+ * Handles what people actually have in these files:
+ *  - a trailing newline (ours) or CRLF (any Windows editor);
+ *  - surrounding quotes, from `echo "KEY" > license.key`;
+ *  - `CLOAKBROWSER_LICENSE_KEY=KEY`, from pasting an env-var line;
+ *  - extra lines, e.g. a comment above the key — the first non-empty line wins;
+ *  - stray NULs and the U+FEFF BOM left by an encoding conversion.
+ */
+export function normaliseKey(raw: string): string {
+  let text = raw.replace(/\u0000/g, '').replace(/\uFEFF/g, '');
+  const line = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => l && !l.startsWith('#'));
+  if (!line) return '';
+
+  text = line;
+  const eq = text.match(/^[A-Z_]*LICENSE[A-Z_]*\s*=\s*(.+)$/i);
+  if (eq?.[1]) text = eq[1].trim();
+  // Strip matching quotes only — an unpaired quote is more likely part of a
+  // mistyped key than a quoting artefact, and silently removing it would send a
+  // different key than the user believes they entered.
+  if (text.length >= 2 && /^(".*"|'.*')$/s.test(text)) text = text.slice(1, -1).trim();
+  return text;
+}
+
 /** Read the saved key, if any. */
 export function readSavedKey(): string | undefined {
   // An env var always wins: the wrapper resolves it first, so reporting
   // anything else here would show the user a key that is not actually in use.
-  const envKey = process.env.CLOAKBROWSER_LICENSE_KEY?.trim();
+  const envKey = normaliseKey(process.env.CLOAKBROWSER_LICENSE_KEY ?? '');
   if (envKey) return envKey;
   try {
-    const content = fs.readFileSync(licenseKeyFile(), 'utf-8').trim();
+    const content = normaliseKey(decodeKeyFile(fs.readFileSync(licenseKeyFile())));
     return content || undefined;
   } catch {
     return undefined;
   }
 }
 
-/** Persist a key with 0600 permissions. */
+/** Persist a key with 0600 permissions. Always plain UTF-8 with a trailing LF. */
 export function saveKey(key: string): void {
   const dir = cloakCacheDir();
   fs.mkdirSync(dir, { recursive: true });
   const file = licenseKeyFile();
-  fs.writeFileSync(file, key.trim() + '\n', { mode: 0o600 });
+  fs.writeFileSync(file, normaliseKey(key) + '\n', { encoding: 'utf-8', mode: 0o600 });
   try {
     fs.chmodSync(file, 0o600);
   } catch {
     /* not supported on Windows */
+  }
+}
+
+/**
+ * Rewrite the key file as plain UTF-8 when it is stored in some other encoding.
+ *
+ * Necessary because this file is a *shared contract*, not our private state: the
+ * `cloakbrowser` CLI and the Pro binary both read it with a plain
+ * `readFileSync(file, 'utf-8')`. So a UTF-16 file does not just break the Hub —
+ * it breaks every script on the machine, and fixing it only in our own memory
+ * would leave the user with a Hub that works and a CLI that mysteriously does
+ * not. Repairing the bytes fixes both at once.
+ *
+ * Returns true when the file was actually rewritten, so callers can say so
+ * instead of silently changing a file the user did not ask us to touch.
+ */
+export function repairKeyFileEncoding(): boolean {
+  const file = licenseKeyFile();
+  let buf: Buffer;
+  try {
+    buf = fs.readFileSync(file);
+  } catch {
+    return false; // no file is not a problem to fix
+  }
+
+  const key = normaliseKey(decodeKeyFile(buf));
+  if (!key) return false;
+
+  const wanted = Buffer.from(key + '\n', 'utf-8');
+  if (buf.equals(wanted)) return false;
+
+  try {
+    fs.writeFileSync(file, wanted, { mode: 0o600 });
+    return true;
+  } catch {
+    // Read-only file or a permissions problem: the in-memory key still works,
+    // so this must not be fatal.
+    return false;
   }
 }
 
@@ -148,9 +250,12 @@ export async function activeSessionCount(key: string): Promise<number | null> {
  * "2 of 5 sessions" without the license module knowing about sessions.
  */
 export async function licenseState(localSessions = 0, opts: { refresh?: boolean } = {}): Promise<LicenseState> {
+  // Repair before reading: a UTF-16 file would otherwise be validated as
+  // mojibake and reported as an invalid key.
+  const keyFileRepaired = repairKeyFileEncoding();
   const key = readSavedKey();
   if (!key) {
-    return { tier: 'none', valid: false, localSessions };
+    return { tier: 'none', valid: false, localSessions, keyFileRepaired };
   }
 
   const base: LicenseState = {
@@ -158,6 +263,7 @@ export async function licenseState(localSessions = 0, opts: { refresh?: boolean 
     maskedKey: mask(key, 6),
     valid: false,
     localSessions,
+    keyFileRepaired,
   };
 
   const info = await validateKey(key);
@@ -177,15 +283,53 @@ export async function licenseState(localSessions = 0, opts: { refresh?: boolean 
     valid: info.valid,
     expires: info.expires,
     checkedAt: Date.now(),
+    seats: info.valid ? planSeatHint(info.plan) : undefined,
   };
+
+  // Remember the seat count so launches can enforce it without a network call.
+  // Only on a valid key: an invalid or expired key should not lower a limit that
+  // a still-running session was started under.
+  if (info.valid) cachedPlanSeats = planSeatHint(info.plan);
 
   if (info.valid && opts.refresh !== false) {
     state.activeSessions = await activeSessionCount(key);
   }
   if (!info.valid) {
-    state.error = 'This license key is invalid or expired.';
+    // Mention the repair here specifically: this is the exact case where the
+    // user was staring at "invalid key" for a key that was in fact fine.
+    state.error = keyFileRepaired
+      ? 'This license key was stored in the wrong text encoding (UTF-16). The file has been rewritten as UTF-8 — press Re-check.'
+      : 'This license key is invalid or expired.';
   }
   return state;
+}
+
+// ---------------------------------------------------------------------------
+// Cached plan seats
+// ---------------------------------------------------------------------------
+
+/**
+ * Last known seat count, remembered in memory.
+ *
+ * `start()` needs the plan's seat limit, but it must not make a network call to
+ * get it: a slow or unreachable license server would then add seconds to every
+ * launch, and a failed call would have to either block the launch (punishing a
+ * paying user for a network blip) or be ignored (making the limit meaningless).
+ * Caching the answer from the last successful validation avoids that choice.
+ *
+ * `null` means "unknown", which `resolveSessionLimit` treats as "fall back to
+ * the user's own preference" rather than guessing a cap.
+ */
+let cachedPlanSeats: number | null = null;
+
+/** Seats last reported by the license server; null until a successful check. */
+export function knownPlanSeats(): number | null {
+  return cachedPlanSeats;
+}
+
+/** Overwrite the cache. Exported for tests and for activation. */
+export function setKnownPlanSeats(seats: number | null): void {
+  cachedPlanSeats = seats;
 }
 
 /** Concurrent-session allowance per plan, used as a soft guard in the UI. */

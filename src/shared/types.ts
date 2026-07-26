@@ -193,6 +193,20 @@ export interface Profile {
   cookies?: CookieJarMeta;
   /** Custom user agent override. Empty = let the binary build a coherent UA. */
   userAgent?: string;
+  /**
+   * True once the one-time search-engine seeding run has completed for this
+   * profile's user-data dir. The de-Googled binary ships with no prepopulated
+   * search engine, and the only supported way to set one is to drive
+   * `chrome://settings/searchEngines` in a persistent profile and close cleanly
+   * — so this has to be remembered per profile, not per app.
+   */
+  searchEngineSeeded?: boolean;
+  /**
+   * Schema version this profile was last migrated to. Absent means v1 (written
+   * before migrations existed). See `shared/migrate.ts` for why value backfill
+   * is gated on this rather than on a field simply being undefined.
+   */
+  schemaVersion?: number;
 }
 
 export interface CookieJarMeta {
@@ -243,6 +257,15 @@ export interface LicenseState {
   localSessions: number;
   checkedAt?: number;
   error?: string;
+  /**
+   * Set when the key file was stored in a non-UTF-8 encoding (typically UTF-16
+   * from PowerShell's `Set-Content`/`>`) and has been rewritten as UTF-8.
+   * Surfaced so the user learns why their valid key was being rejected, instead
+   * of the app appearing to fix itself at random.
+   */
+  keyFileRepaired?: boolean;
+  /** Concurrent sessions the plan allows, per the license server's plan name. */
+  seats?: number | null;
 }
 
 export interface BinaryState {
@@ -275,6 +298,12 @@ export interface AppSettings {
   /** Close every running session when the app quits. */
   closeSessionsOnQuit: boolean;
   theme: 'dark' | 'light';
+  /**
+   * Interface zoom factor (1 = 100%). Applied as a Chromium zoom factor rather
+   * than a font size so padding, row heights and controls scale with the text —
+   * larger type inside unchanged boxes just looks cramped.
+   */
+  uiZoom?: number;
   /** Default fingerprint template applied to brand-new profiles. */
   defaultPlatform: FingerprintPlatform;
   /** Local automation HTTP API (Puppeteer/Selenium control). */
@@ -361,6 +390,29 @@ export interface ImportResult {
   profileId?: string;
   cookies?: number;
   message?: string;
+}
+
+/**
+ * Result of scanning a user-picked folder or archive for profiles.
+ *
+ * Distinct from a bare `DiscoveredBrowserProfile[]` because the interesting cases
+ * here are the *unsuccessful* ones: the user picked a folder one level too high,
+ * or an archive whose layout is unexpected. A silent empty list gives them
+ * nothing to act on, so the scan reports why it found nothing and whether it
+ * gave up early.
+ */
+export interface FolderScan {
+  profiles: DiscoveredBrowserProfile[];
+  /** True when a depth/size cap stopped the walk before it finished. */
+  truncated: boolean;
+  /** Explanation shown when the list is empty or partially complete. */
+  note?: string;
+  /** The folder that was scanned. */
+  root?: string;
+  /** Temp directory an archive was unpacked into, to be released after import. */
+  extractedTo?: string;
+  /** True when the user dismissed the file/folder picker. */
+  cancelled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
