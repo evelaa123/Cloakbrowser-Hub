@@ -23,8 +23,14 @@ public sealed class ProfileRowViewModel : ViewModelBase
         Profile = profile;
         _page = page;
 
-        StartCommand = new RelayCommand(() => page.Start(this), () => !IsRunning);
-        StopCommand = new RelayCommand(() => page.Stop(this), () => IsRunning);
+        // Async, because a launch waits on a process starting. A synchronous command
+        // would block the UI thread for the whole of it and freeze the window at the
+        // exact moment the user is looking for feedback.
+        StartCommand = new AsyncRelayCommand(
+            () => page.StartAsync(this), () => !IsRunning && !IsBusy, page.ReportError);
+
+        StopCommand = new AsyncRelayCommand(
+            () => page.StopAsync(this), () => IsRunning && !IsBusy, page.ReportError);
         EditCommand = new RelayCommand(() => page.Edit(this));
         DuplicateCommand = new RelayCommand(() => page.Duplicate(this));
         DeleteCommand = new RelayCommand(() => page.Delete(this));
@@ -36,8 +42,8 @@ public sealed class ProfileRowViewModel : ViewModelBase
     public string Name => Profile.Name;
     public string? Notes => Profile.Notes;
 
-    public RelayCommand StartCommand { get; }
-    public RelayCommand StopCommand { get; }
+    public AsyncRelayCommand StartCommand { get; }
+    public AsyncRelayCommand StopCommand { get; }
     public RelayCommand EditCommand { get; }
     public RelayCommand DuplicateCommand { get; }
     public RelayCommand DeleteCommand { get; }
@@ -74,14 +80,53 @@ public sealed class ProfileRowViewModel : ViewModelBase
         }
     }
 
-    public bool IsStopped => !_isRunning;
+    public bool IsStopped => !_isRunning && !IsBusy;
 
     private int? _ordinal;
 
     /// <summary>The badge number of the live session, or null when stopped.</summary>
     public string InstanceLabel => _ordinal is { } n ? $"#{n}" : "";
 
-    public string StatusLabel => _isRunning ? "Running" : "Idle";
+    /// <summary>
+    /// A start or stop is in flight.
+    /// <para>
+    /// Held separately from <see cref="IsRunning"/> because the two disagree for as
+    /// long as the launch takes: the session is not running yet, but offering Start
+    /// again would begin a second one against the same profile directory — which
+    /// Chromium refuses, with an error that reads as though the profile is corrupt.
+    /// </para>
+    /// </summary>
+    private bool _isBusy;
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set
+        {
+            if (!SetField(ref _isBusy, value)) return;
+            OnPropertyChanged(nameof(StatusLabel));
+            OnPropertyChanged(nameof(IsStopped));
+            StartCommand.RaiseCanExecuteChanged();
+            StopCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    private string? _busyLabel;
+
+    public string StatusLabel => _busyLabel ?? (_isRunning ? "Running" : "Idle");
+
+    internal void MarkBusy(string label)
+    {
+        _busyLabel = label;
+        IsBusy = true;
+        OnPropertyChanged(nameof(StatusLabel));
+    }
+
+    internal void ClearBusy()
+    {
+        _busyLabel = null;
+        IsBusy = false;
+        OnPropertyChanged(nameof(StatusLabel));
+    }
 
     internal void MarkRunning(int ordinal)
     {

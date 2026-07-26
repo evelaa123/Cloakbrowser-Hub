@@ -12,6 +12,20 @@
   </ItemGroup>
 
   <!--
+    The launch layer keeps its argument assembly and binary-version parsing
+    internal: they are implementation detail, not API other assemblies should
+    build against. They are also the two places where a silent mistake is most
+    expensive - a dropped fingerprint flag, or a version comparison that picks
+    the older browser - so they are asserted directly rather than inferred from
+    the outside. This grant is what lets both be true at once.
+  -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>CloakHub.Core.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!--
     Embedded rather than copied next to the executable. The badge renderer needs
     the base icon at launch time, and a single-file publish - which is what the
     user will actually download - has no reliable directory to read a loose PNG

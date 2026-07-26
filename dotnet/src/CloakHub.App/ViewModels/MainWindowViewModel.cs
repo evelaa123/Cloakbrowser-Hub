@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CloakHub.App.Services;
+using CloakHub.Core.Launch;
 using CloakHub.Core.Model;
 using CloakHub.Core.Platform;
 using CloakHub.Core.Storage;
@@ -27,7 +28,11 @@ public sealed class MainWindowViewModel : ViewModelBase
     private readonly SettingsStore _settings;
     private readonly HubPaths _paths;
 
-    public MainWindowViewModel(ProfileStore profiles, SettingsStore settings, HubPaths paths)
+    public MainWindowViewModel(
+        ProfileStore profiles,
+        SettingsStore settings,
+        HubPaths paths,
+        SessionManager sessions)
     {
         _profiles = profiles;
         _settings = settings;
@@ -35,7 +40,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         Toasts = new ToastHost();
 
-        ProfilesPage = new ProfilesPageViewModel(profiles, settings, paths, Toasts);
+        ProfilesPage = new ProfilesPageViewModel(profiles, settings, paths, Toasts, sessions);
         SettingsPage = new SettingsPageViewModel(settings, paths, Toasts, OnThemeChanged, OnZoomChanged);
 
         // The window scales against this, so it has to start at the stored value --

@@ -5,7 +5,9 @@ using Avalonia.Styling;
 using CloakHub.App.Services;
 using CloakHub.App.ViewModels;
 using CloakHub.App.Views;
+using CloakHub.Core.Launch;
 using CloakHub.Core.Model;
+using CloakHub.Core.Platform;
 using CloakHub.Core.Storage;
 
 namespace CloakHub.App;
@@ -22,12 +24,20 @@ public partial class App : Application
             var settings = new SettingsStore(paths.SettingsFile);
             var profiles = new ProfileStore(paths.ProfilesFile);
 
+            // One session manager for the process. It owns the live browser handles
+            // and the badge-number allocator, and a second instance would hand out
+            // numbers the first one had already given away.
+            var sessions = new SessionManager(
+                new ChromiumLauncher(),
+                new SessionPaths(paths, settings),
+                HostOs.Current);
+
             // Applied before the window is constructed, so it opens in the saved theme
             // rather than flashing the default and then switching -- which is visible
             // and looks like a bug on a light-theme machine.
             ApplyTheme(settings.Current.Theme);
 
-            var shell = new MainWindowViewModel(profiles, settings, paths);
+            var shell = new MainWindowViewModel(profiles, settings, paths, sessions);
 
             desktop.MainWindow = new MainWindow { DataContext = shell };
 

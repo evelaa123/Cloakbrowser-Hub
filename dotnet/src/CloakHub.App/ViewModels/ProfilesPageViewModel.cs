@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CloakHub.App.Services;
 using CloakHub.Core.Branding;
+using CloakHub.Core.Launch;
 using CloakHub.Core.Licensing;
 using CloakHub.Core.Model;
 using CloakHub.Core.Platform;
@@ -25,18 +27,35 @@ public sealed class ProfilesPageViewModel : ViewModelBase
     private readonly SettingsStore _settings;
     private readonly HubPaths _paths;
     private readonly ToastHost _toasts;
-    private readonly OrdinalAllocator _ordinals = new();
+    private readonly SessionManager _sessions;
 
-    /// <summary>Live ordinals, so a badge number is released when its session ends.</summary>
+    /// <summary>
+    /// Profiles the UI currently shows as running, with their badge numbers.
+    /// <para>
+    /// A view-side mirror of the session manager's own table, kept so a row can be
+    /// re-rendered without an async call. The manager remains the authority; this is
+    /// refreshed from it after every start and stop.
+    /// </para>
+    /// </summary>
     private readonly Dictionary<string, int> _running = [];
 
     public ProfilesPageViewModel(
-        ProfileStore store, SettingsStore settings, HubPaths paths, ToastHost toasts)
+        ProfileStore store,
+        SettingsStore settings,
+        HubPaths paths,
+        ToastHost toasts,
+        SessionManager sessions)
     {
         _store = store;
         _settings = settings;
         _paths = paths;
         _toasts = toasts;
+        _sessions = sessions;
+
+        // The browser can end a session without the Hub asking -- the user closes the
+        // last window, or it crashes. Without this the row would sit there claiming to
+        // be running and its Stop button would report that nothing is running.
+        _sessions.SessionsChanged += (_, _) => Dispatcher.UIThread.Post(SyncRunning);
 
         CreateCommand = new AsyncRelayCommand(CreateAsync, onError: toasts.Error);
         AddFolderCommand = new RelayCommand(AddFolder);
@@ -410,28 +429,16 @@ public sealed class ProfilesPageViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Start a session.
+    /// Start a session: build the launch flags, then hand off to the session manager.
     /// <para>
-    /// Not yet wired to a real browser: the <c>IBrowserLauncher</c> adapter over the
-    /// CloakBrowser package is still to be ported. What runs here is everything up to
-    /// the launch — limit check, ordinal allocation, badge planning and asset
-    /// generation — so the parts that are platform-specific can be exercised now.
-    /// The toast says so explicitly rather than reporting a success that did not
-    /// happen.
+    /// The flags are assembled here from the stored profile and settings; everything
+    /// after that — the concurrency cap, badge numbering, the binary-override gate and
+    /// teardown ordering — belongs to <see cref="SessionManager"/> and is not
+    /// duplicated.
     /// </para>
     /// </summary>
-    internal void Start(ProfileRowViewModel row)
+    internal async Task StartAsync(ProfileRowViewModel row)
     {
-        var limit = SessionLimit.Resolve(_settings.Current.MaxConcurrentSessions, planSeats: null);
-
-        if (_running.Count >= limit.Limit)
-        {
-            // Says which constraint applied. A refused launch that does not explain
-            // itself is indistinguishable from a crash.
-            _toasts.Warning($"Session limit reached ({limit.Limit}) — limited by {limit.Reason}.");
-            return;
-        }
-
         var profile = _store.Get(row.Id);
         if (profile is null)
         {
@@ -439,77 +446,183 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             return;
         }
 
-        // Acquire takes no key: the allocator hands out the lowest free number
-        // across all sessions, because the badge answers "which of the windows on my
-        // screen is this" -- a per-profile counter would put two #1 windows side by
-        // side.
-        var ordinal = _ordinals.Acquire();
+        var limit = SessionLimit.Resolve(_settings.Current.MaxConcurrentSessions, planSeats: null);
 
+        // Shown before the row changes state, so a refused launch never leaves a
+        // half-started row behind.
+        if (_running.Count >= limit.Limit)
+        {
+            _toasts.Warning($"Session limit reached ({limit.Limit}) — limited by {limit.Reason}.");
+            return;
+        }
+
+        row.MarkBusy("Starting…");
         try
         {
-            var plan = InstanceBadge.Plan(
-                HostOs.Current,
+            var result = await _sessions.StartAsync(
                 profile,
-                ordinal,
-                assetRoot: _paths.BrandingDir,
-                canWriteAssets: true,
-                stubExecutable: HostOs.FindLauncherStub());
-
-            var assets = new BadgeAssetWriter().Write(
-                plan,
-                browserExecutable: "cloakbrowser",
+                BuildRequest(profile),
                 baseIcon: AppIcon.Bytes,
-                profileName: profile.Name);
+                maxSessions: limit.Limit,
+                canWriteAssets: true,
+                windowsStub: HostOs.FindLauncherStub()).ConfigureAwait(true);
 
-            _running[profile.Id] = ordinal;
-            row.MarkRunning(ordinal);
-            _store.MarkLaunched(profile.Id);
+            switch (result)
+            {
+                case SessionResult.Started started:
+                    _store.MarkLaunched(profile.Id);
+                    SyncRunning();
+                    _toasts.Success($"\"{profile.Name}\" is running as instance #{started.Session.Ordinal}.");
+                    break;
 
-            OnPropertyChanged(nameof(RunningCount));
-            OnPropertyChanged(nameof(CountLabel));
-
-            _toasts.Info(
-                $"Prepared instance #{ordinal} for \"{profile.Name}\" ({plan.Strategy}). " +
-                $"{assets.Written.Count} branding file(s) written. " +
-                "The browser launch itself is not wired up yet.");
+                case SessionResult.Failed failed:
+                    SyncRunning();
+                    _toasts.Error(failed.Error);
+                    break;
+            }
         }
-        catch (Exception)
+        catch (BrowserNotFoundException e)
         {
-            // Release the ordinal on failure, or the number is leaked for the lifetime
-            // of the process and later sessions start counting from a gap.
-            _ordinals.Release(ordinal);
-            throw;
+            // A first run with no browser downloaded yet is an ordinary state, not a
+            // fault, so it gets the instruction rather than a stack trace.
+            SyncRunning();
+            _toasts.Error(e.Message);
+        }
+        catch (Exception e)
+        {
+            SyncRunning();
+            _toasts.Error($"Could not start \"{profile.Name}\": {e.Message}");
+        }
+        finally
+        {
+            row.ClearBusy();
         }
     }
 
-    internal void Stop(ProfileRowViewModel row)
+    /// <summary>
+    /// Last-resort handler for a command that threw.
+    /// <para>
+    /// Start and stop already report their own failures; this catches anything that
+    /// escaped, so an unexpected exception surfaces as a message instead of tearing
+    /// down the app from an async void.
+    /// </para>
+    /// </summary>
+    internal void ReportError(Exception e) => _toasts.Error(e.Message);
+
+    /// <summary>Translate a stored profile into the flags the browser is launched with.</summary>
+    private LaunchRequest BuildRequest(Profile profile)
     {
-        // Removed with its value, because the ordinal -- not the profile id -- is what
-        // the allocator needs back, and reading it before the remove would leave a
-        // path where the dictionary is cleared but the number stays claimed.
-        if (!_running.Remove(row.Id, out var ordinal))
+        var args = FingerprintArgs.Build(profile);
+        args.AddRange(PrivacyArgs.Build(profile));
+
+        // The wrapper's default flag set is not used, so the sandbox decision has to
+        // be made here. Resolve inspects the host: dropping the sandbox is necessary
+        // in containers that forbid unprivileged user namespaces, but it is a real
+        // weakening and is never applied speculatively.
+        args.AddRange(SandboxArgs.Resolve().Args);
+
+        args.AddRange(profile.Startup.ExtraArgs);
+
+        var settings = _settings.Current;
+
+        return new LaunchRequest
+        {
+            Args = args,
+            Headless = profile.Startup.Headless,
+            Locale = profile.Locale.Locale,
+            Timezone = profile.Locale.Timezone,
+            GeoIp = profile.Locale.Mode == LocaleMode.Ip,
+            Humanize = profile.Behaviour.Humanize,
+            ExtensionPaths = [.. profile.Startup.ExtensionPaths],
+            LicenseKey = ReadLicenseKey(),
+            BrowserVersion = string.IsNullOrWhiteSpace(settings.BrowserVersion)
+                ? null
+                : settings.BrowserVersion,
+            ReleaseChannel = settings.ReleaseChannel == ReleaseChannel.Preview ? "preview" : "stable",
+        };
+    }
+
+    /// <summary>
+    /// The activated licence key, or null.
+    /// <para>
+    /// Read at launch rather than cached at startup so activating a key takes effect
+    /// on the next session instead of the next restart. An unreadable file is treated
+    /// as no key: launching unlicensed is a working browser, while refusing to launch
+    /// over an unreadable file is not.
+    /// </para>
+    /// </summary>
+    private string? ReadLicenseKey()
+    {
+        try
+        {
+            if (!File.Exists(_paths.LicenseFile)) return null;
+            var (key, _) = LicenseKeyFile.ReadFile(File.ReadAllBytes(_paths.LicenseFile));
+            return string.IsNullOrWhiteSpace(key) ? null : key;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    internal async Task StopAsync(ProfileRowViewModel row)
+    {
+        if (!_running.ContainsKey(row.Id))
         {
             _toasts.Warning($"\"{row.Name}\" is not running.");
             return;
         }
 
-        _ordinals.Release(ordinal);
-        row.MarkStopped();
-
-        OnPropertyChanged(nameof(RunningCount));
-        OnPropertyChanged(nameof(CountLabel));
+        row.MarkBusy("Stopping…");
+        try
+        {
+            var result = await _sessions.StopAsync(row.Id).ConfigureAwait(true);
+            if (result is SessionResult.Failed failed) _toasts.Error(failed.Error);
+        }
+        finally
+        {
+            row.ClearBusy();
+            SyncRunning();
+        }
     }
 
     /// <summary>Stop everything, for app shutdown.</summary>
     public void StopAll()
     {
-        foreach (var (id, ordinal) in _running.ToList())
+        // Blocking is deliberate here and only here: this runs on the shutdown path,
+        // and letting the process exit while browsers are mid-close would skip the
+        // flush that writes cookies and session storage back to disk.
+        try
         {
-            _ordinals.Release(ordinal);
-            _running.Remove(id);
+            _sessions.StopAllAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Already exiting; a teardown failure has nowhere useful to be reported.
         }
 
-        foreach (var row in Rows) row.MarkStopped();
+        SyncRunning();
+    }
+
+    /// <summary>
+    /// Bring the rows in line with the session manager.
+    /// <para>
+    /// One place that reads the live set and repaints, so a session ending on its own
+    /// and one the user stopped both leave the UI in the same state.
+    /// </para>
+    /// </summary>
+    private void SyncRunning()
+    {
+        var live = _sessions.ListAsync().GetAwaiter().GetResult();
+
+        _running.Clear();
+        foreach (var s in live) _running[s.ProfileId] = s.Ordinal;
+
+        foreach (var row in Rows)
+        {
+            if (_running.TryGetValue(row.Id, out var ordinal)) row.MarkRunning(ordinal);
+            else row.MarkStopped();
+        }
 
         OnPropertyChanged(nameof(RunningCount));
         OnPropertyChanged(nameof(CountLabel));
