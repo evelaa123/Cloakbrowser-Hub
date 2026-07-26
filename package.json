@@ -1,0 +1,45 @@
+{
+  "name": "cloakbrowser-hub",
+  "version": "0.1.0",
+  "description": "Lightweight anti-detect browser manager built on CloakBrowser — profiles, fingerprints, proxies and cookies for Linux, macOS and Windows.",
+  "author": {
+    "name": "CloakBrowser Hub",
+    "email": "hub@cloakbrowser.dev"
+  },
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/index.cjs",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "start": "electron-vite preview",
+    "dist": "npm run build && electron-builder",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:all": "npm run build && electron-builder -mwl"
+  },
+  "dependencies": {
+    "cloakbrowser": "^0.5.2",
+    "playwright-core": "^1.61.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "preact": "^10.25.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
