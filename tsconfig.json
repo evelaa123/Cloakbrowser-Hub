@@ -27,6 +27,13 @@
       "react-dom": ["node_modules/preact/compat"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "electron.vite.config.ts", "vitest.config.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "electron.vite.config.ts",
+    "vitest.config.ts"
+  ],
   "exclude": ["node_modules", "dist", "release"]
 }

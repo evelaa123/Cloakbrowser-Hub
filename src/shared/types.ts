@@ -277,6 +277,48 @@ export interface AppSettings {
   theme: 'dark' | 'light';
   /** Default fingerprint template applied to brand-new profiles. */
   defaultPlatform: FingerprintPlatform;
+  /** Local automation HTTP API (Puppeteer/Selenium control). */
+  automation: AutomationSettings;
+}
+
+// ---------------------------------------------------------------------------
+// Automation API
+// ---------------------------------------------------------------------------
+
+export interface AutomationSettings {
+  enabled: boolean;
+  /** TCP port for the local REST API. */
+  port: number;
+  /**
+   * Bearer token required on every request.
+   *
+   * Generated, never empty while enabled: an unauthenticated endpoint that can
+   * launch browsers and hand out CDP URLs is a local privilege-escalation
+   * vector for any other process on the machine (including a page's own
+   * JavaScript, which can reach 127.0.0.1).
+   */
+  token: string;
+}
+
+/** Settings plus whether the server is actually listening right now. */
+export interface AutomationState {
+  settings: AutomationSettings;
+  /** True only when the HTTP server is bound; false after a failed start. */
+  listening: boolean;
+  /** Base URL for scripts, e.g. http://127.0.0.1:3777 */
+  baseUrl: string;
+}
+
+/** What a caller needs to attach Puppeteer/Playwright/Selenium to a session. */
+export interface AutomationEndpoint {
+  profileId: string;
+  profileName: string;
+  /** CDP WebSocket URL — `puppeteer.connect({ browserWSEndpoint })`. */
+  wsEndpoint: string;
+  /** CDP HTTP origin — `http://127.0.0.1:<port>`, for Selenium's debuggerAddress. */
+  httpEndpoint: string;
+  /** The devtools port Chromium actually bound. */
+  port: number;
 }
 
 // ---------------------------------------------------------------------------
