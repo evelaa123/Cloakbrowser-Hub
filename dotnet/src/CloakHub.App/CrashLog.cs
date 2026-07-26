@@ -59,6 +59,31 @@ public static class CrashLog
     }
 
     /// <summary>
+    /// Append a one-line note about a non-fatal problem.
+    /// <para>
+    /// For degradations the app deliberately survives — a missing icon asset, a
+    /// branding file that could not be written. These must not be silent, because a
+    /// user reporting "there's no icon" needs something on disk to point at, but they
+    /// also must not interrupt: the app is still doing its job.
+    /// </para>
+    /// </summary>
+    public static void Note(string message)
+    {
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(Path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            File.AppendAllText(
+                Path, $"{DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss} UTC  note: {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Same reasoning as Write: a logger that throws is worse than no logger.
+        }
+    }
+
+    /// <summary>
     /// Whether a display server appears to be present.
     /// <para>
     /// The single most common cause of a Linux startup failure for a GUI app is no

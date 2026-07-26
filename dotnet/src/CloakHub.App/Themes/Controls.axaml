@@ -297,6 +297,82 @@
   </Style>
 
   <!-- ====================================================================
+       Editor tab strip (.tab)
+
+       Distinct from .nav-item: the sidebar marks the active page with a filled
+       row, whereas these sit in a single line under a heading, so the active one
+       is marked with the accent underline the CSS used. Avalonia has no
+       ::after pseudo-element, so the underline is a bottom BorderThickness on
+       the button itself rather than a generated box.
+       ==================================================================== -->
+
+  <Style Selector="Button.tab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.tab /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.tab:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button.tab.active">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.tab.active /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <!-- ====================================================================
+       Colour swatch (.swatch)
+
+       Only the frame. The colour itself is a child Border in the template that
+       uses this class, because a Background set on the Button is painted over by
+       the ContentPresenter's own fill on hover and press.
+       ==================================================================== -->
+
+  <Style Selector="Button.swatch">
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Hover marks the frame rather than the fill, so the colour stays readable. -->
+  <Style Selector="Button.swatch:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.swatch:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Inline validation message under a field (.err-text). -->
+  <Style Selector="TextBlock.err-text">
+    <Setter Property="Foreground" Value="{DynamicResource ErrBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
+  </Style>
+
+  <!-- ====================================================================
        Table (.table)
        ==================================================================== -->
 

@@ -341,6 +341,73 @@ public sealed class ProfileStore
     }
 
     /// <summary>
+    /// Rename a folder.
+    /// <para>
+    /// Returns false when the folder is gone rather than throwing, so a stale UI row
+    /// produces a message instead of a crash.
+    /// </para>
+    /// </summary>
+    public bool RenameFolder(string id, string name)
+    {
+        EnsureLoaded();
+        _gate.Wait();
+        try
+        {
+            var index = _folders.FindIndex(f => f.Id == id);
+            if (index < 0) return false;
+
+            var trimmed = string.IsNullOrWhiteSpace(name) ? "New folder" : name.Trim();
+            if (_folders[index].Name == trimmed) return true;
+
+            _folders[index] = _folders[index] with { Name = trimmed };
+            SaveLocked();
+            return true;
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>
+    /// Move a profile into a folder, or to the root when <paramref name="folderId"/> is null.
+    /// <para>
+    /// Validates the target folder exists. Without that check a move to a folder
+    /// deleted in another window would set an orphaned id, and the profile would
+    /// disappear from every folder view until the next load repaired it.
+    /// </para>
+    /// </summary>
+    public bool MoveToFolder(string profileId, string? folderId)
+    {
+        EnsureLoaded();
+        _gate.Wait();
+        try
+        {
+            if (folderId is not null && !_folders.Any(f => f.Id == folderId)) return false;
+
+            var index = _profiles.FindIndex(p => p.Id == profileId);
+            if (index < 0) return false;
+            if (_profiles[index].FolderId == folderId) return true;
+
+            // UpdatedAt is touched here, unlike MarkLaunched: which folder a profile
+            // lives in is part of its stored configuration.
+            _profiles[index] = _profiles[index] with
+            {
+                FolderId = folderId,
+                UpdatedAt = Timestamp(),
+            };
+
+            SaveLocked();
+            return true;
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>Number of profiles in a folder, for the sidebar counts.</summary>
+    public int CountIn(string? folderId)
+    {
+        EnsureLoaded();
+        return _profiles.Count(p => p.FolderId == folderId);
+    }
+
+    /// <summary>
     /// Delete a folder, moving its profiles to the root.
     /// <para>
     /// Never deletes the profiles inside it. Deleting a container in a file manager

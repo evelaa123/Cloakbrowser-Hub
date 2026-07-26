@@ -41,9 +41,10 @@ public static class ProfileMigration
     ///   <item>1 — baseline.</item>
     ///   <item>2 — storage quota backfilled to a plausible disk size.</item>
     ///   <item>3 — per-surface noise, port blocking and folders introduced.</item>
+    ///   <item>4 — workflow status, category, MAC intent and device name introduced.</item>
     /// </list>
     /// </summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     /// <summary>Default storage quota in MB — describes a plausible disk, not merely a threshold pass.</summary>
     public const int DefaultStorageQuotaMb = 120000;
@@ -122,6 +123,15 @@ public static class ProfileMigration
             }
         }
 
+        // Version 4 adds status, kind, mac and deviceName. There is deliberately no
+        // backfill step for them: every one has a meaningful "unset" default (None,
+        // None, Real, null) and an absent field deserialises to exactly that. Writing
+        // them in explicitly would touch every profile on disk to record nothing, and
+        // rule 2 exists to stop precisely that kind of churn.
+        //
+        // The structural repair above does cover the new `mac` sub-object, because an
+        // absent object and an empty one are not equivalent to the deserialiser.
+
         if (version != CurrentVersion)
         {
             raw["schemaVersion"] = CurrentVersion;
@@ -140,6 +150,7 @@ public static class ProfileMigration
         ("geo",         () => new JsonObject()),
         ("behaviour",   () => new JsonObject()),
         ("startup",     () => new JsonObject()),
+        ("mac",         () => new JsonObject()),
     ];
 
     private static readonly string[] RequiredArrays = ["tags"];

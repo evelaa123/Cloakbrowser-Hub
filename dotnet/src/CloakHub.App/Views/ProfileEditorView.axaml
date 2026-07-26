@@ -1,0 +1,1000 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CloakHub.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.ProfileEditorView"
+             x:DataType="vm:ProfileEditorViewModel">
+
+  <!--
+    The editor is presented as a full-pane overlay rather than a dialog window.
+
+    A second OS window would need its own icon, its own theme application and its
+    own close semantics on three platforms, all to show a form that belongs to the
+    profile list behind it. The overlay also cannot be lost behind the main window,
+    which is the standard complaint about modal tool windows.
+  -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Background="{DynamicResource BgBrush}">
+
+    <!-- ==================================================================
+         Header
+         ================================================================== -->
+    <Border Grid.Row="0" Padding="22,16"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+          <TextBlock Classes="h1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+          <TextBlock Classes="sub" Text="Editing a profile — nothing is saved until you press Save." />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="ghost" Content="Cancel" Command="{Binding CancelCommand}" />
+          <Button Classes="primary" Content="Save" Command="{Binding SaveCommand}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ==================================================================
+         Tab strip
+         ================================================================== -->
+    <Border Grid.Row="1" Padding="18,10"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <ItemsControl ItemsSource="{Binding Tabs}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <!-- Wraps rather than scrolls: seven tabs must all stay reachable at the
+                 minimum window width without a horizontal scrollbar appearing. -->
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:EditorTabItem">
+            <Button Classes="tab" Classes.active="{Binding IsActive}"
+                    Content="{Binding Label}" Margin="0,0,4,0"
+                    Command="{Binding $parent[UserControl].((vm:ProfileEditorViewModel)DataContext).SelectTabCommand}"
+                    CommandParameter="{Binding Tab}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+
+    <!-- ==================================================================
+         Body: form on the left, live summary on the right
+         ================================================================== -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,300">
+
+      <ScrollViewer Grid.Column="0" Padding="22,18">
+        <Panel>
+
+          <!-- ============================================================
+               GENERAL
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsGeneral}">
+
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Identity" FontWeight="SemiBold" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="PROFILE NAME" />
+                  <TextBox Text="{Binding Name, Mode=TwoWay}" Watermark="e.g. Amazon buyer 3" />
+                  <TextBlock Classes="err-text" Text="{Binding NameError}"
+                             IsVisible="{Binding HasNameError}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="STATUS" />
+                    <ComboBox ItemsSource="{Binding StatusChoices}"
+                              SelectedItem="{Binding Status, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.StatusName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Your own label. Separate from whether a browser is running." />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <TextBlock Classes="th" Text="CATEGORY" />
+                    <ComboBox ItemsSource="{Binding KindChoices}"
+                              SelectedItem="{Binding Kind, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.KindName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="A reminder for you. It changes no launch setting." />
+                  </StackPanel>
+                </Grid>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="FOLDER" />
+                  <ComboBox ItemsSource="{Binding FolderChoices}"
+                            SelectedItem="{Binding Folder, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:FolderChoice">
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="TAGS" />
+                  <TextBox Text="{Binding TagsText, Mode=TwoWay}"
+                           Watermark="comma, separated, tags" />
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="Searchable from the profiles list." />
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="ROW COLOUR" />
+                  <ItemsControl ItemsSource="{Binding ColourChoices}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <!--
+                          The colour is painted by a child Border, not by the Button's
+                          own Background. The default button template paints its
+                          ContentPresenter over the button's background on hover and
+                          press, so a Background set on the Button itself showed
+                          through only until the pointer touched it. A child is inside
+                          the presenter and therefore always on top of that fill.
+                        -->
+                        <Button Classes="swatch" Margin="0,0,6,6"
+                                Command="{Binding $parent[UserControl].((vm:ProfileEditorViewModel)DataContext).PickColourCommand}"
+                                CommandParameter="{Binding}">
+                          <Border Width="22" Height="22" CornerRadius="3"
+                                  Background="{Binding}" />
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="NOTES" />
+                  <TextBox Text="{Binding Notes, Mode=TwoWay}"
+                           AcceptsReturn="True" TextWrapping="Wrap"
+                           MinHeight="80" Watermark="Anything you need to remember about this profile." />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- ============================================================
+               FINGERPRINT
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsFingerprint}">
+
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Device identity" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Text="The seed derives every value the browser is not told explicitly. Keeping it fixed is what makes this profile look like a returning visitor rather than a new machine each launch." />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="SEED" />
+                    <NumericUpDown Value="{Binding Seed, Mode=TwoWay}"
+                                   Minimum="0" Maximum="99999" Increment="1" FormatString="0" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="New seed" VerticalAlignment="Bottom"
+                          Margin="0,0,6,0" Command="{Binding NewSeedCommand}" />
+                  <Button Grid.Column="2" Classes="primary" Content="New fingerprint"
+                          VerticalAlignment="Bottom" Command="{Binding NewFingerprintCommand}" />
+                </Grid>
+
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="OPERATING SYSTEM" />
+                    <ComboBox ItemsSource="{Binding PlatformChoices}"
+                              SelectedItem="{Binding Platform, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.PlatformName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="What sites see, regardless of your real OS. Changing it re-picks the screen and GPU so they cannot contradict each other." />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <TextBlock Classes="th" Text="OS VERSION" />
+                    <ComboBox ItemsSource="{Binding PlatformVersionChoices}"
+                              SelectedItem="{Binding PlatformVersion, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Client Hints platform version." />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="BROWSER BRAND" />
+                    <ComboBox ItemsSource="{Binding BrandChoices}"
+                              SelectedItem="{Binding Brand, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.BrandName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <TextBlock Classes="th" Text="BRAND VERSION" />
+                    <TextBox Text="{Binding BrandVersion, Mode=TwoWay}"
+                             Watermark="blank = match the binary" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- Screen -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Screen" FontWeight="SemiBold" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="MODE" />
+                  <ComboBox ItemsSource="{Binding ValueModes}"
+                            SelectedItem="{Binding ScreenMode, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.ValueModeName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="10" IsVisible="{Binding IsScreenManual}">
+                  <Grid ColumnDefinitions="*,*">
+                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                      <TextBlock Classes="th" Text="WIDTH" />
+                      <NumericUpDown Value="{Binding ScreenWidth, Mode=TwoWay}"
+                                     Minimum="320" Maximum="7680" Increment="1" FormatString="0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                      <TextBlock Classes="th" Text="HEIGHT" />
+                      <NumericUpDown Value="{Binding ScreenHeight, Mode=TwoWay}"
+                                     Minimum="240" Maximum="4320" Increment="1" FormatString="0" />
+                    </StackPanel>
+                  </Grid>
+
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="COMMON FOR THIS PLATFORM" />
+                    <ItemsControl ItemsSource="{Binding ScreenPresets}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ScreenPreset">
+                          <Button Classes="ghost" Content="{Binding Label}" Margin="0,0,6,6"
+                                  FontSize="{DynamicResource FontSizeSmall}"
+                                  Command="{Binding $parent[UserControl].((vm:ProfileEditorViewModel)DataContext).ApplyScreenPresetCommand}"
+                                  CommandParameter="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- GPU -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Graphics" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Text="Vendor and renderer are applied as a pair. They are not independent in reality, and a mismatched combination is more identifying than a real one." />
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="MODE" />
+                  <ComboBox ItemsSource="{Binding ValueModes}"
+                            SelectedItem="{Binding GpuMode, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.ValueModeName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="10" IsVisible="{Binding IsGpuManual}">
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="VENDOR" />
+                    <TextBox Text="{Binding GpuVendor, Mode=TwoWay}" />
+                  </StackPanel>
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="RENDERER" />
+                    <TextBox Text="{Binding GpuRenderer, Mode=TwoWay}"
+                             TextWrapping="Wrap" AcceptsReturn="False" />
+                  </StackPanel>
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="KNOWN GOOD PAIRS" />
+                    <ItemsControl ItemsSource="{Binding GpuPresets}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GpuPreset">
+                          <Button Classes="ghost" Content="{Binding Label}" Margin="0,0,6,6"
+                                  FontSize="{DynamicResource FontSizeSmall}"
+                                  Command="{Binding $parent[UserControl].((vm:ProfileEditorViewModel)DataContext).ApplyGpuPresetCommand}"
+                                  CommandParameter="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- CPU / memory -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Hardware" FontWeight="SemiBold" />
+
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="CPU CORES" />
+                    <ComboBox ItemsSource="{Binding ValueModes}"
+                              SelectedItem="{Binding CpuMode, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.ValueModeName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ComboBox ItemsSource="{Binding CpuChoices}"
+                              SelectedItem="{Binding CpuCores, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"
+                              IsVisible="{Binding IsCpuManual}" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="navigator.hardwareConcurrency" />
+                  </StackPanel>
+
+                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <TextBlock Classes="th" Text="DEVICE MEMORY (GB)" />
+                    <ComboBox ItemsSource="{Binding ValueModes}"
+                              SelectedItem="{Binding MemoryMode, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.ValueModeName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ComboBox ItemsSource="{Binding MemoryChoices}"
+                              SelectedItem="{Binding DeviceMemory, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"
+                              IsVisible="{Binding IsMemoryManual}" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Powers of two only — the API buckets real RAM, so 12 is not a value a browser can report." />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- Noise -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Noise" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Text="{Binding NoiseNote}" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                  <StackPanel Grid.Row="0" Grid.Column="0" Spacing="5" Margin="0,0,10,10">
+                    <TextBlock Classes="th" Text="CANVAS" />
+                    <ComboBox ItemsSource="{Binding NoiseModes}"
+                              SelectedItem="{Binding CanvasNoise, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Row="0" Grid.Column="1" Spacing="5" Margin="10,0,0,10">
+                    <TextBlock Classes="th" Text="WEBGL" />
+                    <ComboBox ItemsSource="{Binding NoiseModes}"
+                              SelectedItem="{Binding WebGlNoise, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="AUDIO" />
+                    <ComboBox ItemsSource="{Binding NoiseModes}"
+                              SelectedItem="{Binding AudioNoise, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <TextBlock Classes="th" Text="CLIENT RECTS" />
+                    <ComboBox ItemsSource="{Binding NoiseModes}"
+                              SelectedItem="{Binding ClientRectsNoise, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- WebRTC -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="WebRTC" FontWeight="SemiBold" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="MODE" />
+                  <ComboBox ItemsSource="{Binding WebRtcModes}"
+                            SelectedItem="{Binding WebRtcMode, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.WebRtcModeName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsWebRtcManual}">
+                  <TextBlock Classes="th" Text="PUBLIC IP" />
+                  <TextBox Text="{Binding WebRtcIp, Mode=TwoWay}" Watermark="203.0.113.4" />
+                </StackPanel>
+
+                <Border Classes="callout warn" IsVisible="{Binding HasWebRtcNote}">
+                  <TextBlock Text="{Binding WebRtcNote}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}" />
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <!-- Misc fingerprint -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Other" FontWeight="SemiBold" />
+
+                <Grid ColumnDefinitions="*,*">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <TextBlock Classes="th" Text="STORAGE QUOTA (MB)" />
+                    <NumericUpDown Value="{Binding StorageQuotaMb, Mode=TwoWay}"
+                                   Minimum="0" Maximum="10000000" Increment="1000" FormatString="0" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="A small quota is what detectors read as an incognito window. Blank hands control back to the browser." />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <TextBlock Classes="th" Text="TASKBAR HEIGHT (PX)" />
+                    <NumericUpDown Value="{Binding TaskbarHeight, Mode=TwoWay}"
+                                   Minimum="0" Maximum="400" Increment="1" FormatString="0" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Affects screen.availHeight coherence." />
+                  </StackPanel>
+                </Grid>
+
+                <CheckBox Content="Allow third-party cookies"
+                          IsChecked="{Binding AllowThirdPartyCookies, Mode=TwoWay}" />
+
+                <CheckBox Content="Windows font metrics"
+                          IsChecked="{Binding WindowsFontMetrics, Mode=TwoWay}"
+                          IsEnabled="{Binding IsWindows}" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="FONTS DIRECTORY" />
+                  <TextBox Text="{Binding FontsDir, Mode=TwoWay}"
+                           Watermark="/path/to/windows/fonts" />
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="The font list is a strong signal. Spoofing Windows from Linux without Windows fonts installed is detectable." />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- ============================================================
+               PROXY
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsProxy}">
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Proxy" FontWeight="SemiBold" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="TYPE" />
+                  <ComboBox ItemsSource="{Binding ProxyKinds}"
+                            SelectedItem="{Binding ProxyKind, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.ProxyKindName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="14" IsVisible="{Binding HasProxy}">
+                  <Grid ColumnDefinitions="2*,*">
+                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                      <TextBlock Classes="th" Text="HOST" />
+                      <TextBox Text="{Binding ProxyHost, Mode=TwoWay}" Watermark="203.0.113.9" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                      <TextBlock Classes="th" Text="PORT" />
+                      <NumericUpDown Value="{Binding ProxyPort, Mode=TwoWay}"
+                                     Minimum="1" Maximum="65535" Increment="1" FormatString="0" />
+                    </StackPanel>
+                  </Grid>
+
+                  <Grid ColumnDefinitions="*,*">
+                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                      <TextBlock Classes="th" Text="USERNAME" />
+                      <TextBox Text="{Binding ProxyUsername, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                      <TextBlock Classes="th" Text="PASSWORD" />
+                      <TextBox Text="{Binding ProxyPassword, Mode=TwoWay}"
+                               PasswordChar="•" />
+                    </StackPanel>
+                  </Grid>
+
+                  <Border Classes="callout warn">
+                    <TextBlock Text="{Binding ProxySecretNote}" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeSmall}" />
+                  </Border>
+
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="BYPASS LIST" />
+                    <TextBox Text="{Binding ProxyBypass, Mode=TwoWay}"
+                             Watermark="&lt;local&gt;, .example.com" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Hosts that skip the proxy." />
+                  </StackPanel>
+
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="IP ROTATION URL" />
+                    <TextBox Text="{Binding ProxyRotationUrl, Mode=TwoWay}"
+                             Watermark="https://provider.example/rotate?key=…" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Recorded for later use. The Hub does not call it yet." />
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- ============================================================
+               LOCALE & GEO
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsLocale}">
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Language and timezone" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Text="Following the proxy's exit IP is the only setting that can never contradict the network, which is why it is the default." />
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="SOURCE" />
+                  <ComboBox ItemsSource="{Binding LocaleModes}"
+                            SelectedItem="{Binding LocaleMode, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.LocaleModeName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="14" IsVisible="{Binding IsLocaleManual}">
+                  <Grid ColumnDefinitions="*,*">
+                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                      <TextBlock Classes="th" Text="LOCALE" />
+                      <TextBox Text="{Binding Locale, Mode=TwoWay}" Watermark="en-US" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                      <TextBlock Classes="th" Text="TIMEZONE" />
+                      <TextBox Text="{Binding Timezone, Mode=TwoWay}" Watermark="America/New_York" />
+                    </StackPanel>
+                  </Grid>
+
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="MATCHED PRESETS" />
+                    <ItemsControl ItemsSource="{Binding LocalePresets}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LocalePreset">
+                          <Button Classes="ghost" Content="{Binding Label}" Margin="0,0,6,6"
+                                  FontSize="{DynamicResource FontSizeSmall}"
+                                  Command="{Binding $parent[UserControl].((vm:ProfileEditorViewModel)DataContext).ApplyLocalePresetCommand}"
+                                  CommandParameter="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Sets both fields together — a locale in the wrong timezone is testable in one line of JavaScript." />
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Geolocation" FontWeight="SemiBold" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="MODE" />
+                  <ComboBox ItemsSource="{Binding GeoModes}"
+                            SelectedItem="{Binding GeoMode, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.GeoModeName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*,*" IsVisible="{Binding IsGeoManual}">
+                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,8,0">
+                    <TextBlock Classes="th" Text="LATITUDE" />
+                    <TextBox Text="{Binding Latitude, Mode=TwoWay}" Watermark="40.7128" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="5" Margin="4,0,4,0">
+                    <TextBlock Classes="th" Text="LONGITUDE" />
+                    <TextBox Text="{Binding Longitude, Mode=TwoWay}" Watermark="-74.0060" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Spacing="5" Margin="8,0,0,0">
+                    <TextBlock Classes="th" Text="ACCURACY (M)" />
+                    <TextBox Text="{Binding GeoAccuracy, Mode=TwoWay}" Watermark="100" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- ============================================================
+               BEHAVIOUR
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsBehaviour}">
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Human-like input" FontWeight="SemiBold" />
+
+                <Border Classes="callout">
+                  <TextBlock Text="{Binding BehaviourNote}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}" />
+                </Border>
+
+                <CheckBox Content="Humanise automated input"
+                          IsChecked="{Binding Humanize, Mode=TwoWay}" />
+
+                <StackPanel Spacing="14" IsVisible="{Binding Humanize}">
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="PRESET" />
+                    <ComboBox ItemsSource="{Binding HumanPresets}"
+                              SelectedItem="{Binding HumanPreset, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.HumanPresetName}}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+
+                  <Grid ColumnDefinitions="*,*">
+                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                      <TextBlock Classes="th" Text="TYPING DELAY (MS/CHAR)" />
+                      <TextBox Text="{Binding TypingDelay, Mode=TwoWay}"
+                               Watermark="blank = preset default" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                      <TextBlock Classes="th" Text="MISTYPE CHANCE (0–1)" />
+                      <TextBox Text="{Binding MistypeChance, Mode=TwoWay}"
+                               Watermark="0.02" />
+                    </StackPanel>
+                  </Grid>
+
+                  <CheckBox Content="Idle pauses between actions"
+                            IsChecked="{Binding IdleBetweenActions, Mode=TwoWay}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- ============================================================
+               STARTUP
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsStartup}">
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Startup" FontWeight="SemiBold" />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="START PAGES" />
+                  <TextBox Text="{Binding StartPagesText, Mode=TwoWay}"
+                           AcceptsReturn="True" TextWrapping="NoWrap"
+                           MinHeight="80" Watermark="One URL per line." />
+                </StackPanel>
+
+                <CheckBox Content="Headless (no visible window)"
+                          IsChecked="{Binding Headless, Mode=TwoWay}" />
+
+                <CheckBox Content="Send Do Not Track"
+                          IsChecked="{Binding DoNotTrack, Mode=TwoWay}" />
+                <TextBlock Classes="faint" TextWrapping="Wrap" Margin="26,-8,0,0"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Off by default. Most people leave it off, so enabling it makes this profile slightly more distinctive, not less." />
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="EXTENSIONS" />
+                  <TextBox Text="{Binding ExtensionPathsText, Mode=TwoWay}"
+                           AcceptsReturn="True" TextWrapping="NoWrap"
+                           MinHeight="60"
+                           Watermark="Absolute paths to unpacked extension folders, one per line." />
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="BLOCKED LOCALHOST PORTS" />
+                  <TextBox Text="{Binding BlockedPortsText, Mode=TwoWay}" />
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="{Binding PortsNote}" />
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="CUSTOM USER AGENT" />
+                  <TextBox Text="{Binding UserAgent, Mode=TwoWay}"
+                           Watermark="blank = derived from the fingerprint" />
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="Overriding this by hand is easy to get wrong: it must agree with the platform, brand and versions above, or the mismatch is itself a signal." />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- ============================================================
+               ADVANCED
+               ============================================================ -->
+          <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsAdvanced}">
+
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Extra Chromium flags" FontWeight="SemiBold" />
+                <TextBox Text="{Binding ExtraArgsText, Mode=TwoWay}"
+                         AcceptsReturn="True" TextWrapping="NoWrap"
+                         MinHeight="90" FontFamily="monospace"
+                         Watermark="--some-flag=value, one per line" />
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Applied last, but they cannot override the identity flags this profile owns — a stray flag must not be able to silently break the fingerprint." />
+              </StackPanel>
+            </Border>
+
+            <!-- MAC address -->
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Network adapter" FontWeight="SemiBold" />
+
+                <!--
+                  The caveat comes first, above the controls, deliberately. Presented
+                  after them it reads as a footnote to a feature that works; the point
+                  is that this does nothing for browser fingerprinting at all.
+                -->
+                <Border Classes="callout warn">
+                  <TextBlock Text="{Binding MacNote}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}" />
+                </Border>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="MAC ADDRESS" />
+                  <ComboBox ItemsSource="{Binding MacModes}"
+                            SelectedItem="{Binding MacMode, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Converter={x:Static vm:Converters.ValueModeName}}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="14" IsVisible="{Binding IsMacManual}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,8,0">
+                      <TextBlock Classes="th" Text="ADDRESS" />
+                      <TextBox Text="{Binding MacAddressText, Mode=TwoWay}"
+                               Classes="mono" Watermark="00:1A:2B:3C:4D:5E" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Generate" VerticalAlignment="Bottom"
+                            Command="{Binding RandomMacCommand}" />
+                  </Grid>
+
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="{Binding MacValidationNote}" />
+
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="th" Text="INTERFACE" />
+                    <TextBox Text="{Binding MacInterface, Mode=TwoWay}"
+                             Watermark="eth0, en0, Wi-Fi" />
+                    <TextBlock Classes="faint" TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSizeTiny}"
+                               Text="Changing a MAC needs administrator rights, and applying it is not wired up yet — this only records the intent." />
+                  </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="DEVICE NAME" />
+                  <TextBox Text="{Binding DeviceName, Mode=TwoWay}" Watermark="DESKTOP-A1B2C3" />
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="Also invisible to websites. It is what the local network sees." />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Flag preview -->
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Resolved launch flags" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Text="Generated by the same code the launcher uses, so this cannot drift from what actually runs." />
+                </StackPanel>
+                <Border Background="{DynamicResource BgInputBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="{DynamicResource RadiusSm}" Padding="12">
+                  <SelectableTextBlock Text="{Binding FlagPreview}"
+                                       Classes="mono" TextWrapping="Wrap"
+                                       FontSize="{DynamicResource FontSizeTiny}" />
+                </Border>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+        </Panel>
+      </ScrollViewer>
+
+      <!-- ==============================================================
+           Summary rail
+           ============================================================== -->
+      <Border Grid.Column="1" Padding="18"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+        <ScrollViewer>
+          <StackPanel Spacing="14">
+            <TextBlock Text="SUMMARY" Classes="th" />
+
+            <StackPanel Spacing="9">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Seed" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding SeedLabel}" Classes="mono"
+                           FontSize="{DynamicResource FontSizeSmall}" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Platform" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding PlatformSummary}" FontSize="{DynamicResource FontSizeSmall}" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Screen" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding ScreenSummary}" FontSize="{DynamicResource FontSizeSmall}" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Graphics" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding GpuSummary}" FontSize="{DynamicResource FontSizeSmall}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="CPU" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding CpuSummary}" FontSize="{DynamicResource FontSizeSmall}" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Memory" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding MemorySummary}" FontSize="{DynamicResource FontSizeSmall}" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Noise" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding NoiseSummary}" FontSize="{DynamicResource FontSizeSmall}" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Proxy" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding ProxySummary}" Classes="mono"
+                           FontSize="{DynamicResource FontSizeSmall}" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Locale" Classes="faint" FontSize="{DynamicResource FontSizeTiny}" />
+                <TextBlock Text="{Binding LocaleSummary}" FontSize="{DynamicResource FontSizeSmall}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- ==================================================================
+         Footer
+         ================================================================== -->
+    <!--
+      The footer carries the note only. Save and Cancel are in the header, which is
+      outside the ScrollViewer and so always on screen; repeating them here put a
+      second pair directly under the toast stack, where a toast covered the copy
+      the user was reaching for.
+    -->
+    <Border Grid.Row="3" Padding="22,14"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <TextBlock Classes="faint" VerticalAlignment="Center"
+                 FontSize="{DynamicResource FontSizeTiny}"
+                 Text="Changes are held in memory until you save. Save and Cancel are at the top of the page." />
+    </Border>
+  </Grid>
+</UserControl>

@@ -93,6 +93,60 @@ public sealed record StartupConfig
     public bool DoNotTrack { get; init; }
 }
 
+/// <summary>
+/// A workflow label the user assigns, independent of whether a browser is running.
+/// <para>
+/// Distinct from the live "running / idle" state on purpose. Whether a browser
+/// process exists right now is a fact the Hub observes; whether an account is warmed
+/// up, banned or ready to sell is a judgement only the user holds, and it has to
+/// survive restarts. Conflating the two would mean the label vanished every time the
+/// app closed, which is exactly when it matters most — at fifty profiles the
+/// question "which of these are burnt" cannot be answered from memory.
+/// </para>
+/// </summary>
+public enum ProfileStatus { None, New, Warming, Ready, Working, Paused, Banned, Retired }
+
+/// <summary>
+/// What the profile is used for, which drives the platform-specific hints shown in
+/// the editor rather than changing any launch flag.
+/// <para>
+/// It is deliberately advisory. Encoding "this is a Facebook profile" into the
+/// fingerprint would be a mistake: there is no configuration that makes a browser
+/// more acceptable to one site in a way a site could not also detect. What the label
+/// legitimately buys is a reminder of which identity a profile belongs to when the
+/// list is long.
+/// </para>
+/// </summary>
+public enum ProfileKind { None, Facebook, Google, TikTok, Crypto, Shopping, Ads, Other }
+
+/// <summary>
+/// A locally-administered MAC address for the profile's session.
+/// <para>
+/// <b>This does not affect your browser fingerprint.</b> No web API exposes a MAC
+/// address — not <c>navigator</c>, not WebRTC, not WebGL — so a site cannot read it
+/// and changing it cannot make a profile look like a different visitor. It changes
+/// what the local network sees: the DHCP lease, the router's device list, and
+/// MAC-based recognition on a captive portal.
+/// </para>
+/// <para>
+/// It is modelled because other anti-detect tools offer it and users reasonably ask
+/// where it went. Applying it needs elevated privileges and is planned per
+/// interface by <c>MacSpoof</c>, so this record only records the intent; the UI
+/// states the limitation rather than implying a fingerprint benefit.
+/// </para>
+/// </summary>
+public sealed record MacConfig
+{
+    /// <summary>Off leaves the interface alone, which is the default.</summary>
+    public ValueMode Mode { get; init; } = ValueMode.Real;
+
+    /// <summary>Explicit address when <see cref="Mode"/> is Manual.</summary>
+    public string? Address { get; init; }
+
+    /// <summary>Interface to change, e.g. <c>eth0</c> or <c>en0</c>. Blank means "ask at launch".</summary>
+    public string? InterfaceName { get; init; }
+}
+
 public sealed record Profile
 {
     public string Id { get; init; } = "";
@@ -102,6 +156,26 @@ public sealed record Profile
 
     /// <summary>Id of the containing folder, or null for the root.</summary>
     public string? FolderId { get; init; }
+
+    /// <summary>User-assigned workflow label. See <see cref="ProfileStatus"/>.</summary>
+    public ProfileStatus Status { get; init; } = ProfileStatus.None;
+
+    /// <summary>Advisory category. See <see cref="ProfileKind"/>.</summary>
+    public ProfileKind Kind { get; init; } = ProfileKind.None;
+
+    /// <summary>
+    /// Local network MAC intent. Not a fingerprint control — see <see cref="MacConfig"/>.
+    /// </summary>
+    public MacConfig Mac { get; init; } = new();
+
+    /// <summary>
+    /// Hostname the OS reports on the LAN, when the user pins one.
+    /// <para>
+    /// Like the MAC, invisible to websites. Kept for the same reason and labelled
+    /// with the same caveat in the UI.
+    /// </para>
+    /// </summary>
+    public string? DeviceName { get; init; }
 
     /// <summary>Row accent colour in the profiles table (hex, e.g. "#3b82f6").</summary>
     public string? Colour { get; init; }

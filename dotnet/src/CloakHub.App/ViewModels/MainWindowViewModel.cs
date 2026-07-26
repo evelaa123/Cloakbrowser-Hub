@@ -134,6 +134,17 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public string PlatformLabel => HostOs.Describe(HostOs.Current);
 
+    /// <summary>
+    /// The sidebar logo, or null when the asset is unavailable.
+    /// <para>
+    /// Exposed with <see cref="HasMark"/> rather than bound directly, so a missing
+    /// asset collapses the Image instead of leaving a 28px hole beside the wordmark.
+    /// </para>
+    /// </summary>
+    public Avalonia.Media.Imaging.Bitmap? Mark => Branding.Mark;
+
+    public bool HasMark => Branding.Mark is not null;
+
     private void OnThemeChanged(AppTheme theme) => App.ApplyTheme(theme);
 
     /// <summary>

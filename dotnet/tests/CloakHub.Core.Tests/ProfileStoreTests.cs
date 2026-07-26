@@ -301,6 +301,226 @@ public sealed class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_blank_folder_name_becomes_a_placeholder()
+    {
+        // The sidebar creates a folder and drops straight into inline rename, so an
+        // empty commit is the normal path through this code, not an edge case.
+        Assert.Equal("New folder", Store().AddFolder("   ").Name);
+    }
+
+    [Fact]
+    public void Folders_are_ordered_after_the_ones_already_there()
+    {
+        var store = Store();
+        var first = store.AddFolder("First");
+        var second = store.AddFolder("Second");
+
+        Assert.True(second.SortOrder > first.SortOrder);
+    }
+
+    [Fact]
+    public void Renaming_a_folder_persists()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+
+        Assert.True(store.RenameFolder(folder.Id, "Clients"));
+        Assert.Equal("Clients", Store().Folders().Single().Name);
+    }
+
+    [Fact]
+    public void Renaming_a_folder_trims_and_replaces_a_blank_name()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+
+        store.RenameFolder(folder.Id, "  Clients  ");
+        Assert.Equal("Clients", store.Folders().Single().Name);
+
+        store.RenameFolder(folder.Id, "   ");
+        Assert.Equal("New folder", store.Folders().Single().Name);
+    }
+
+    [Fact]
+    public void Renaming_a_missing_folder_reports_false_instead_of_throwing()
+    {
+        // A stale sidebar row must produce a message, not a crash.
+        Assert.False(Store().RenameFolder("ghost", "Whatever"));
+    }
+
+    [Fact]
+    public void Renaming_a_folder_to_its_current_name_does_not_rewrite_the_file()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        var before = File.GetLastWriteTimeUtc(_path);
+
+        Thread.Sleep(20);
+        Assert.True(store.RenameFolder(folder.Id, "Work"));
+
+        // Committing an unchanged inline rename is the common case — pressing Enter
+        // without typing — and it must not touch the user's file.
+        Assert.Equal(before, File.GetLastWriteTimeUtc(_path));
+    }
+
+    [Fact]
+    public void Moving_a_profile_into_a_folder_persists()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        var profile = store.Add(New("Amazon"));
+
+        Assert.True(store.MoveToFolder(profile.Id, folder.Id));
+        Assert.Equal(folder.Id, Store().Get(profile.Id)!.FolderId);
+    }
+
+    [Fact]
+    public void Moving_a_profile_to_the_root_persists()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        var profile = store.Add(New("Amazon") with { FolderId = folder.Id });
+
+        Assert.True(store.MoveToFolder(profile.Id, null));
+        Assert.Null(Store().Get(profile.Id)!.FolderId);
+    }
+
+    [Fact]
+    public void Moving_into_a_folder_that_no_longer_exists_is_refused()
+    {
+        // Without the check the profile would get an orphaned folder id and vanish
+        // from every folder view until the next load repaired it.
+        var store = Store();
+        var profile = store.Add(New("Amazon"));
+
+        Assert.False(store.MoveToFolder(profile.Id, "ghost"));
+        Assert.Null(store.Get(profile.Id)!.FolderId);
+    }
+
+    [Fact]
+    public void Moving_an_unknown_profile_reports_false()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+
+        Assert.False(store.MoveToFolder("ghost", folder.Id));
+    }
+
+    [Fact]
+    public void Moving_a_profile_touches_the_updated_timestamp()
+    {
+        // Unlike a launch, which folder a profile lives in is part of its stored
+        // configuration.
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        var profile = store.Add(New("Amazon"));
+        var before = store.Get(profile.Id)!.UpdatedAt;
+
+        Thread.Sleep(20);
+        store.MoveToFolder(profile.Id, folder.Id);
+
+        Assert.True(store.Get(profile.Id)!.UpdatedAt >= before);
+    }
+
+    [Fact]
+    public void Moving_a_profile_to_the_folder_it_is_already_in_does_not_rewrite_the_file()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        var profile = store.Add(New("Amazon"));
+        store.MoveToFolder(profile.Id, folder.Id);
+        var before = File.GetLastWriteTimeUtc(_path);
+
+        Thread.Sleep(20);
+        Assert.True(store.MoveToFolder(profile.Id, folder.Id));
+
+        Assert.Equal(before, File.GetLastWriteTimeUtc(_path));
+    }
+
+    [Fact]
+    public void Counting_reports_per_folder_totals_and_the_root()
+    {
+        // These numbers are the sidebar badges, so an off-by-one is visible on every
+        // screen the user looks at.
+        var store = Store();
+        var work = store.AddFolder("Work");
+        var play = store.AddFolder("Play");
+
+        store.Add(New("A") with { FolderId = work.Id });
+        store.Add(New("B") with { FolderId = work.Id });
+        store.Add(New("C") with { FolderId = play.Id });
+        store.Add(New("D"));
+
+        Assert.Equal(2, store.CountIn(work.Id));
+        Assert.Equal(1, store.CountIn(play.Id));
+        // null is the root, not "no filter" — it must not count everything.
+        Assert.Equal(1, store.CountIn(null));
+        Assert.Equal(0, store.CountIn("ghost"));
+    }
+
+    [Fact]
+    public void Counting_follows_a_move()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        var profile = store.Add(New("Amazon"));
+
+        Assert.Equal(0, store.CountIn(folder.Id));
+        store.MoveToFolder(profile.Id, folder.Id);
+        Assert.Equal(1, store.CountIn(folder.Id));
+        Assert.Equal(0, store.CountIn(null));
+    }
+
+    [Fact]
+    public void Deleting_a_folder_leaves_the_other_folders_alone()
+    {
+        var store = Store();
+        var work = store.AddFolder("Work");
+        var play = store.AddFolder("Play");
+        var kept = store.Add(New("Stays") with { FolderId = play.Id });
+
+        Assert.True(store.RemoveFolder(work.Id));
+
+        Assert.Equal(play.Id, store.Folders().Single().Id);
+        Assert.Equal(play.Id, store.Get(kept.Id)!.FolderId);
+    }
+
+    [Fact]
+    public void Deleting_a_missing_folder_reports_false()
+    {
+        Assert.False(Store().RemoveFolder("ghost"));
+    }
+
+    [Fact]
+    public void A_deleted_folder_stays_deleted_after_a_reload()
+    {
+        var store = Store();
+        var folder = store.AddFolder("Work");
+        store.Add(New("Inside") with { FolderId = folder.Id });
+
+        store.RemoveFolder(folder.Id);
+
+        var reloaded = Store();
+        Assert.Empty(reloaded.Folders());
+        Assert.Null(reloaded.List().Single().FolderId);
+    }
+
+    [Fact]
+    public void Concurrent_folder_adds_all_survive()
+    {
+        // Same read-modify-write hazard as profiles: the folder list is shared state
+        // behind the same gate, and losing a folder loses the grouping for every
+        // profile that pointed at it.
+        var store = Store();
+
+        Parallel.For(0, 30, i => store.AddFolder($"Folder {i}"));
+
+        Assert.Equal(30, store.Folders().Count);
+        Assert.Equal(30, Store().Folders().Count);
+        Assert.Equal(30, store.Folders().Select(f => f.Id).Distinct().Count());
+    }
+
+    [Fact]
     public void A_profile_pointing_at_a_missing_folder_is_moved_to_the_root_on_load()
     {
         // Written directly, simulating a file where the folder was lost. Without this

@@ -26,10 +26,21 @@
     <Border Grid.Column="0" Classes="sidebar" Width="{DynamicResource SidebarWidth}">
       <Grid RowDefinitions="Auto,*,Auto" Margin="12">
 
-        <!-- Brand -->
-        <StackPanel Grid.Row="0" Margin="4,6,4,18" Spacing="2">
-          <TextBlock Text="CloakBrowser" FontSize="15" FontWeight="SemiBold" />
-          <TextBlock Text="Hub" Classes="faint" FontSize="15" FontWeight="SemiBold" />
+        <!--
+          Brand: the cloak mark beside the wordmark.
+
+          The mark is the wordmark-free art (build/make-icon.py drops "HUB" below
+          64px, and this renders at 28), so the logo does not say "Hub" twice next
+          to a text label that already does.
+        -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,6,4,18" Spacing="10">
+          <Image Source="{Binding Mark}" Width="28" Height="28"
+                 VerticalAlignment="Center"
+                 IsVisible="{Binding HasMark}" />
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="CloakBrowser" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="Hub" Classes="faint" FontSize="15" FontWeight="SemiBold" />
+          </StackPanel>
         </StackPanel>
 
         <!-- Navigation -->

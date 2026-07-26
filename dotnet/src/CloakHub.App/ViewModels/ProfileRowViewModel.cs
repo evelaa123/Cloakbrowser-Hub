@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using CloakHub.Core.Model;
 
 namespace CloakHub.App.ViewModels;
@@ -23,6 +25,7 @@ public sealed class ProfileRowViewModel : ViewModelBase
 
         StartCommand = new RelayCommand(() => page.Start(this), () => !IsRunning);
         StopCommand = new RelayCommand(() => page.Stop(this), () => IsRunning);
+        EditCommand = new RelayCommand(() => page.Edit(this));
         DuplicateCommand = new RelayCommand(() => page.Duplicate(this));
         DeleteCommand = new RelayCommand(() => page.Delete(this));
     }
@@ -35,8 +38,23 @@ public sealed class ProfileRowViewModel : ViewModelBase
 
     public RelayCommand StartCommand { get; }
     public RelayCommand StopCommand { get; }
+    public RelayCommand EditCommand { get; }
     public RelayCommand DuplicateCommand { get; }
     public RelayCommand DeleteCommand { get; }
+
+    /// <summary>The folder this profile is filed in, or null for the root.</summary>
+    public string? FolderId => Profile.FolderId;
+
+    /// <summary>
+    /// The entries in this row's "Move to" menu.
+    /// <para>
+    /// Built on each access rather than captured at construction, so a folder created
+    /// after this row was built still appears. The menu is only materialised when
+    /// opened, so rebuilding costs nothing.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<MoveTargetViewModel> MoveTargets =>
+        [.. _page.FolderChoices().Select(f => new MoveTargetViewModel(f, this, _page))];
 
     // ------------------------------------------------------------------
     // Live state

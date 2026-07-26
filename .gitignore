@@ -8,3 +8,8 @@ out/
 .env.local
 coverage/
 *.tsbuildinfo
+
+# .NET build output
+artifacts/
+[Bb]in/
+[Oo]bj/

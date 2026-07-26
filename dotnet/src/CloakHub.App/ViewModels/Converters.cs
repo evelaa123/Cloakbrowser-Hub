@@ -40,4 +40,40 @@ public static class Converters
 
     public static readonly IValueConverter ChannelName =
         new FuncValueConverter<ReleaseChannel, string>(DisplayNames.Of);
+
+    // Labels for the profile editor's combo boxes. Same pattern as above: the box
+    // binds the enum value, only the displayed text is converted.
+    public static readonly IValueConverter ValueModeName =
+        new FuncValueConverter<ValueMode, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter NoiseModeName =
+        new FuncValueConverter<NoiseMode, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter ProxyKindName =
+        new FuncValueConverter<ProxyKind, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter LocaleModeName =
+        new FuncValueConverter<LocaleMode, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter GeoModeName =
+        new FuncValueConverter<GeoMode, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter WebRtcModeName =
+        new FuncValueConverter<WebRtcMode, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter BrandName =
+        new FuncValueConverter<BrowserBrand, string>(b => b.ToString());
+
+    public static readonly IValueConverter StatusName =
+        new FuncValueConverter<ProfileStatus, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter KindName =
+        new FuncValueConverter<ProfileKind, string>(DisplayNames.Of);
+
+    public static readonly IValueConverter HumanPresetName =
+        new FuncValueConverter<HumanPresetKind, string>(DisplayNames.Of);
+
+    /// <summary>True when the bound string is non-empty, for collapsing hint rows.</summary>
+    public static readonly IValueConverter NotEmpty =
+        new FuncValueConverter<string?, bool>(s => !string.IsNullOrWhiteSpace(s));
 }

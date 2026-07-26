@@ -1,418 +1,272 @@
+<div align="center">
+
+<img src="dotnet/src/CloakHub.App/Assets/app-icon.png" width="120" alt="CloakBrowser Hub" />
+
 # CloakBrowser Hub
 
-A desktop manager for **anti-detect browser profiles**, built on top of the
-[`cloakbrowser`](https://www.npmjs.com/package/cloakbrowser) patched-Chromium
-runtime. Create isolated profiles, give each one its own fingerprint, proxy,
-timezone and cookie jar, and launch them side by side from a single window.
+**An anti-detect browser manager — profiles, fingerprints, folders and proxies.**
 
-Electron + Preact + TypeScript. Windows, macOS and Linux.
+Built on [CloakBrowser](https://www.npmjs.com/package/cloakbrowser). .NET 8 + Avalonia.
+Runs on Windows, Linux and macOS from a single codebase.
 
-> **Status: 0.1.0, pre-release.** The full feature surface is implemented and
-> unit-tested, but the app has not yet been run against live sites end to end.
-> See [Limitations](#limitations).
+[Download](#download) · [Build from source](#build-from-source) · [What works today](#what-works-today) · [How it works](#how-it-works)
+
+</div>
 
 ---
 
-## Why
+## What this is
 
-Running multiple accounts on the same machine normally leaks a shared identity:
-the same GPU strings, screen size, fonts, timezone and WebRTC IP appear
-everywhere. CloakBrowser Hub gives each profile a **consistent, isolated
-identity** — fingerprint, network egress and locale all agree with each other —
-and keeps its cookies and user-data directory separate from every other profile.
+Every browser profile here is a separate identity: its own fingerprint, its own
+cookie jar, its own proxy, its own disk directory. Nothing is shared between them,
+which is the entire point — two profiles that leak a common trait are two profiles a
+site can link back to one person.
 
----
+The Hub is the manager around that idea. It stores the profiles, generates
+fingerprints that are internally coherent, groups them into folders, and launches
+sessions.
 
-## Features
-
-### Profiles
-- Unlimited local profiles, each with its own user-data directory and cookie jar.
-- Per-profile fingerprint: platform, screen size, GPU vendor/renderer, CPU cores,
-  device memory, storage quota, font metrics and a stable noise seed.
-- One-click **randomise**, drawn from realistic hardware pools rather than
-  uniform noise — a 4-core machine reporting a 32 GB memory size is itself a
-  signal, so the pools are weighted toward plausible combinations.
-- Duplicate, export and import profiles as JSON.
-- Colour-coded rows, search and bulk launch.
-
-### Fingerprint consistency
-The fingerprint is passed to Chromium as command-line switches
-(`--fingerprint-*`), so it is applied by the browser itself rather than patched
-in by JavaScript after page load — there is no injected-script timing window for
-a detector to catch. The **Preview args** button in the editor shows the exact
-argv for a profile before you launch it.
-
-Coupled values are derived, not chosen independently: locale drives `--lang`,
-`Accept-Language` and `--fingerprint-locale`; the timezone follows the selected
-region; WebRTC egress follows the proxy IP. 18 locale presets cover the common
-regions (US ×3, UK, DE, FR, NL, ES, IT, PL, TR, BR, CA, AU, IN, SG, JP, AE).
-
-### Proxies
-- HTTP, HTTPS, SOCKS4 and SOCKS5.
-- A tolerant parser accepts the formats providers actually ship:
-  `host:port`, `host:port:user:pass`, `user:pass@host:port`,
-  `host:port:user`, an optional `scheme://` prefix, and a leading
-  `US-1 | ` style label. `host:port:user:pass` and `user:pass:host:port` are
-  disambiguated by inspecting which side looks like a hostname plus a numeric
-  port, falling back to the provider-standard order when genuinely ambiguous.
-- Bulk paste, one proxy per line.
-- **Check** resolves the live egress IP, country, city and timezone through the
-  proxy, with three geo-IP providers tried in order so a single outage does not
-  block a check.
-- Rotate a profile onto the next proxy in the pool.
-
-### Cookies
-Import into a profile from three formats, auto-detected:
-- **JSON** — Cookie-Editor, EditThisCookie and Playwright `storageState` shapes.
-- **Netscape** `cookies.txt` — curl, wget and browser extensions.
-- **Raw `Cookie:` header** — `name=value; name2=value2`. This format carries no
-  domain, so the UI asks for one when it detects it.
-
-Validation runs before import and reports the detected format, cookie count,
-domains and any authentication cookies it recognises. Two rough edges of real
-exports are handled: `HttpOnly` flags that Netscape exports omit are restored
-for cookies known to require them, and `SameSite` is defaulted for known
-cross-site identity providers — without this, imported sessions silently fail
-to authenticate.
-
-### Import from installed browsers
-Discover and import existing local profiles from **Chrome, Edge, Brave,
-Chromium, Opera, Vivaldi, Yandex and Firefox**, on all three platforms.
-
-Also **Scan a folder…** and **Import from .zip…** for profiles that did not come
-from a browser installed on this machine — a backup, an external drive, a copy
-from another PC. The scan looks for profile markers rather than a fixed layout,
-so the picked folder can be the profile itself, its `User Data` parent, or an
-archive with a wrapper directory. Archive extraction rejects path-traversal
-("zip slip") entries and symlinks, and caps total expanded size.
-
-### Sessions
-Launch, stop and stop-all, with live per-session status and a streaming log
-viewer per session.
-
-### Interface
-**Settings → Interface size**, or `Ctrl`/`Cmd` `+` / `-` / `0`, scales the whole
-window (zoom factor, not just font size, so paddings and controls grow with the
-text) and is persisted between runs. The base type scale was also raised — the
-smallest label was 10.5px, which is below comfortable reading size on a 1080p
-laptop.
-
-### Licensing
-Reflects the upstream `cloakbrowser` tiers (`none` / `free` / `pro`), including
-a GitHub sign-in flow for a free key. The patched-Chromium binary is downloaded
-on demand with progress reporting, not bundled.
-
-The **concurrent-session limit comes from the plan**, not a free-typed number:
-the plan's seat count is the ceiling and the Settings value is a preference
-underneath it (lowering it is a legitimate choice on a small machine; raising it
-past the entitlement is not, since the browser refuses those sessions anyway).
-When the plan is unknown — no key, or the license server is unreachable — the
-cap is *not* guessed, because blocking a paying user's launches over a network
-blip is worse than allowing one session too many.
-
-Key files are read encoding-tolerantly (UTF-16LE/BE with or without a BOM, UTF-8
-BOM) and repaired in place, because PowerShell writes UTF-16 by default and that
-silently broke both this app and the upstream CLI.
-
-### Automation API
-An opt-in local HTTP API (Settings → Automation API) for driving profiles from a
-script. Starting a profile returns a **CDP endpoint**, so any Chrome DevTools
-Protocol client attaches to a real Hub session — same profile directory, same
-fingerprint switches, same proxy — rather than a separate browser you would have
-to configure yourself. See [Automation](#automation) below.
+> **Status: the desktop app is a work in progress.**
+> Profile management is complete and usable. Session launching is not yet wired to a
+> real browser. Read [What works today](#what-works-today) before downloading — it is
+> an honest table, not a feature list.
 
 ---
 
-## Install
+## Download
 
-Requires **Node.js 20+**.
+Self-contained builds. No .NET runtime, no Node, no installer — one file.
+
+| Platform | File | Size |
+|---|---|---|
+| Windows x64 | `CloakBrowserHub-v1.0.0-win-x64.zip` | ~42 MB |
+| Linux x64 | `CloakBrowserHub-v1.0.0-linux-x64.tar.gz` | ~40 MB |
+
+Grab them from the [Releases page](../../releases).
+
+**Windows** — unzip, run `CloakBrowserHub.exe`. SmartScreen will warn about an
+unrecognised publisher because the binary is unsigned; *More info → Run anyway*.
+
+**Linux** — needs a desktop session (X11 or Wayland):
+
+```bash
+tar -xzf CloakBrowserHub-v1.0.0-linux-x64.tar.gz
+chmod +x CloakBrowserHub
+./CloakBrowserHub
+```
+
+**macOS** — not currently published as a binary. The code targets it and the icon
+pipeline emits a proper `.icns`, but an unsigned, unnotarised `.app` is refused by
+Gatekeeper in a way that looks like a corrupt download, so shipping one would waste
+your time. Build it yourself — see below.
+
+---
+
+## What works today
+
+The desktop app has five sections. Three of them are still placeholders, and they say
+so on screen rather than showing an empty pane.
+
+| Area | State | Notes |
+|---|---|---|
+| **Profiles list** | ✅ Working | Search, sort, duplicate, delete, live counts |
+| **Folders** | ✅ Working | Create, inline rename, delete, move profiles between them |
+| **Profile editor** | ✅ Working | 7 tabs — General, Fingerprint, Proxy, Locale & Geo, Behaviour, Startup, Advanced |
+| **Fingerprint generation** | ✅ Working | Coherent per-platform draws, one-click re-roll |
+| **Settings** | ✅ Working | Session limit, data directory, release channel, UI zoom, automation port |
+| **Storage & migration** | ✅ Working | Atomic writes, corrupt-file quarantine, schema 1→4 migration |
+| **Launching a browser** | ⚠️ **Not wired** | Everything up to the launch runs — limit check, badge assets, argument building — but no browser starts. `IBrowserLauncher` has no implementation yet. |
+| **Proxy library** | ⚠️ Placeholder | Per-profile proxies work in the editor; the shared library, parser and checker are not ported |
+| **Import** | ⚠️ Placeholder | Chrome/Firefox/anti-detect importers not ported |
+| **License** | ⚠️ Placeholder | Key parsing exists in Core; activation UI not ported |
+| **Cookie import/export** | ❌ Not ported | |
+| **Automation HTTP API** | ❌ Not ported | The port setting exists; the server does not |
+
+If you need the missing pieces today, the previous Electron implementation still has
+them — see [History](#history).
+
+---
+
+## Features in detail
+
+### Coherent fingerprints, not random ones
+
+A fingerprint is only convincing when its parts co-occur in the real world. A machine
+claiming macOS with an `ANGLE (NVIDIA, ... D3D11)` renderer describes a computer that
+cannot exist, and that single contradiction is *more* identifying than the honest
+values would have been.
+
+So the value pools are keyed by platform and drawn per platform, never mixed:
+
+- **GPU vendor and renderer are stored as pairs**, so "Apple Inc." can never be
+  emitted with a Radeon renderer.
+- **Screen resolutions are per-OS** — Apple has never shipped a 1366×768 panel.
+- **Locale and timezone are offered together** — `de-DE` in `Asia/Tokyo` is a
+  contradiction a site can test for in one line of JavaScript.
+- **`deviceMemory` is powers of two only**, because that is the entire set of values
+  the API is specified to report.
+
+The distributions are also deliberately lumpy rather than uniform. 1920×1080 appears
+three times in the Windows screen pool because it is genuinely modal. Sampling
+uniformly from a set of plausible values produces a population that is itself
+implausible — a profile holding a 1-in-9 screen size stands out more, not less.
+
+### Folders
+
+Grouping, like Dolphin Anty: a sidebar with live counts, inline rename on Enter,
+right-click for rename/delete, and a **Move to** submenu on every row.
+
+**Deleting a folder never deletes the profiles inside it.** They move to the root.
+Deleting a container in a file manager takes its contents, but a profile represents
+real work — an aged identity with cookies and history — and losing several to one
+misclick on a grouping label would be indefensible.
+
+### Storage that does not lose your work
+
+- **Atomic writes** — write to a temp file, then rename. A crash mid-save leaves the
+  previous file intact rather than a truncated one.
+- **Corrupt files are quarantined, not overwritten.** If `profiles.json` cannot be
+  parsed it is moved aside and the app opens empty with a message naming the file.
+  An empty list is indistinguishable from the app having thrown your work away, so
+  it says where the bytes went.
+- **One unreadable profile does not hide the others.** A single bad entry is skipped
+  and reported; the rest load.
+- **Version-gated migration.** Backfill only runs for profiles below the version that
+  introduced a field, so an explicitly cleared value is never resurrected.
+
+### Per-instance taskbar badges
+
+Each running session gets a numbered icon so twelve open windows are still tellable
+apart — a real `.ico` on Windows, `.icns` on macOS, and X11 window icons on Linux.
+
+---
+
+## Build from source
+
+Needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Nothing else.
 
 ```bash
 git clone https://github.com/evelaa123/Cloakbrowser-Hub.git
-cd Cloakbrowser-Hub
-npm install
+cd Cloakbrowser-Hub/dotnet
+
+dotnet build                # 0 warnings expected — warnings are errors here
+dotnet test                 # 342 tests
+dotnet run --project src/CloakHub.App
 ```
 
-## Run
+### Publishing a single-file binary
 
 ```bash
-npm run dev     # development, with hot reload
-npm start       # preview a production build
+# Windows
+dotnet publish src/CloakHub.App/CloakHub.App.csproj -c Release -r win-x64 \
+  --self-contained true -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+  -p:DebugType=none -o artifacts/win-x64
+
+# Linux
+dotnet publish src/CloakHub.App/CloakHub.App.csproj -c Release -r linux-x64 \
+  --self-contained true -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+  -p:DebugType=none -o artifacts/linux-x64
+
+# macOS (Apple Silicon; use osx-x64 for Intel)
+dotnet publish src/CloakHub.App/CloakHub.App.csproj -c Release -r osx-arm64 \
+  --self-contained true -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/osx-arm64
 ```
 
-## Build
+### Diagnostics CLI
+
+`CloakHub.Doctor` prints what the app would do without launching anything — the exact
+browser arguments a profile produces, host detection, badge planning, network checks.
 
 ```bash
-npm run build       # compile main, preload and renderer into dist/
-npm run dist        # installer for the current platform
-npm run dist:win    # or :mac / :linux / :all
-```
-
-The icon set is committed, so a build needs no extra step. To regenerate it
-after changing `build/icon-master.png`:
-
-```bash
-python3 build/make-icon.py   # needs Pillow
-```
-
-That one script writes `build/icon.png`, `build/icons/*.png` **and** the sidebar
-mark at `src/renderer/assets/cloak-mark.png`, so the in-app mark and the
-packaged icon are always the same artwork. Sizes below 64px are emitted without
-the `HUB` wordmark — three glyphs at 32px are a grey smear, and the cloak
-silhouette alone reads better.
-
-## Test
-
-```bash
-npm test        # vitest, 273 tests
-npm run test:watch
-npm run typecheck
+dotnet run --project src/CloakHub.Doctor -- --help
 ```
 
 ---
 
-## Architecture
-
-Standard Electron three-process split, with `contextIsolation` on and no
-`nodeIntegration` in the renderer.
+## How it works
 
 ```
-src/
-  main/                     Node side — full privileges
-    index.ts                app entry, window lifecycle
-    ipc/handlers.ts         every IPC endpoint
-    browser/                session spawn + lifecycle
-    importers/              installed-browser profile discovery
-    services/               license, proxy, cookies, store, secrets, paths
-  preload/index.ts          contextBridge — the only renderer↔main surface
-  renderer/                 Preact UI (no Node access)
-    App.tsx, state.tsx      shell + global store
-    pages/                  Profiles, Editor, Proxies, Cookies, Import,
-                            License, Settings, Logs
-  shared/                   used by both sides
-    types.ts                domain model
-    ipc.ts                  channel names + payload types
-    fingerprint-args.ts     fingerprint → Chromium argv
-    defaults.ts             hardware pools, locale presets, factory defaults
+dotnet/
+├── src/
+│   ├── CloakHub.Core/          # No UI. All logic, fully testable.
+│   │   ├── Model/              # Profile, Fingerprint, Defaults (pools + factory)
+│   │   ├── Storage/            # ProfileStore, JsonStore, ProfileMigration
+│   │   ├── Launch/             # FingerprintArgs, PrivacyArgs, SessionManager
+│   │   ├── Branding/           # Per-instance badge icons (.ico/.icns/X11)
+│   │   ├── Licensing/          # Key parsing, session limits
+│   │   ├── Network/            # MAC address planning
+│   │   └── Platform/           # Host OS detection
+│   ├── CloakHub.App/           # Avalonia UI — views and view models only
+│   └── CloakHub.Doctor/        # Diagnostics CLI
+└── tests/
+    └── CloakHub.Core.Tests/    # 342 xUnit tests
 ```
 
-**IPC is the contract.** All 52 channels — 48 request/response plus 4
-main→renderer events — are declared once in `src/shared/ipc.ts` with typed
-payloads, so the renderer, preload bridge and main handlers cannot drift apart
-without a type error. Two dedicated test files (`ipc-contract`,
-`preload-contract`) assert that every declared channel is actually implemented
-and exposed, and additionally that the 4 event channels are *not* registered as
-invoke handlers. A channel added to one layer and forgotten in another fails the
-suite rather than failing silently at runtime.
+**Core holds every decision; the UI holds none.** The UI project contains no
+fingerprint logic, no file format knowledge and no argument building. That is why the
+diagnostics CLI can produce byte-identical launch arguments to the app — they call the
+same code — and why the rules are testable without a display server.
 
-The renderer never touches `fs`, `net` or `child_process`; everything crosses
-the preload bridge.
+Two conventions worth knowing before contributing:
 
----
+- **Warnings are errors** (`TreatWarningsAsErrors`). The build has zero warnings and
+  should stay that way.
+- **Compiled bindings are on by default.** Every view declares `x:DataType`, so a
+  binding to a property that does not exist is a build error rather than a silently
+  empty field at runtime.
 
-## Automation
+### Where your data lives
 
-Off by default. Enable it in **Settings → Automation API**, which also shows the
-access token and a copyable snippet.
-
-The server binds `127.0.0.1` only — never `0.0.0.0` — so nothing on the network
-can reach it, and no CORS headers are ever sent, so a web page in a browser
-cannot call it either. Every request needs the token:
-
-```
-authorization: Bearer <token>
-```
-
-`x-api-token: <token>` is accepted as an alternative. Tokens are compared by
-hashing both sides and using `crypto.timingSafeEqual`, so a wrong token costs the
-same time as a right one and the response reveals nothing about the length.
-Bodies are capped at 256 KB.
-
-### Routes
-
-| Method | Path | Result |
-|---|---|---|
-| `GET` | `/health` | `{ ok, api, version }`. The only unauthenticated route — liveness only, no data. |
-| `GET` | `/profiles` | `{ profiles: [{ id, name, platform, running }] }` |
-| `POST` | `/profiles` | Creates a profile from the JSON body (all fields optional). `201 { profile }` |
-| `GET` | `/profiles/:id` | `{ profile }` — the full record |
-| `PATCH` | `/profiles/:id` | Merges the JSON body into the profile. `{ profile }` |
-| `DELETE` | `/profiles/:id` | Deletes it. Pass `?keepData=true` to keep the profile directory. `409` if running. |
-| `POST` | `/profiles/:id/start` | Launches it, returns the CDP endpoint (below) |
-| `POST` | `/profiles/:id/stop` | `{ stopped: true }` |
-| `GET` | `/profiles/:id/endpoint` | The CDP endpoint of an already-running profile, or `404` |
-
-Unknown paths return `404`; `OPTIONS` returns `405`.
-
-`start` is **idempotent**: calling it on an already-running profile returns the
-existing endpoint with `alreadyRunning: true` rather than launching a second
-browser, so a client retrying after a timeout cannot leave an orphan process.
-
-If the binary is missing, `start` downloads it first — the call just takes
-longer, it does not fail.
-
-### The CDP endpoint
-
-`start` and `endpoint` return:
-
-```json
-{
-  "profileId": "…",
-  "profileName": "…",
-  "wsEndpoint": "ws://127.0.0.1:41763/devtools/browser/<uuid>",
-  "httpEndpoint": "http://127.0.0.1:41763",
-  "port": 41763
-}
-```
-
-The port is assigned by the kernel per launch, not fixed, so concurrent profiles
-cannot collide. The `wsEndpoint` UUID is read back from Chromium's
-`/json/version` — it cannot be derived from the port.
-
-Attaching gives you the **real Hub session**: same profile directory, same
-`--fingerprint-*` switches, same proxy. That is the point of going through the
-API rather than launching Chromium yourself.
-
-```js
-const r = await fetch(`${API}/profiles/${id}/start`, {
-  method: 'POST',
-  headers: { authorization: `Bearer ${TOKEN}` },
-});
-const { wsEndpoint, httpEndpoint } = await r.json();
-
-// Puppeteer
-const browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
-
-// Playwright
-const browser = await chromium.connectOverCDP(wsEndpoint);
-```
-
-Selenium attaches over the HTTP endpoint instead:
-
-```python
-opts = webdriver.ChromeOptions()
-opts.debugger_address = httpEndpoint.removeprefix("http://")  # "127.0.0.1:41763"
-driver = webdriver.Chrome(options=opts)
-```
-
-Sessions started *before* the API was enabled have no debugging port; restart
-them to control them.
-
-Rotating the token in Settings takes effect immediately — old tokens are
-rejected from the next request on.
-
----
-
-## Testing
-
-273 tests across 15 files:
-
-| File | Covers |
+| OS | Path |
 |---|---|
-| `proxy.test.ts` | all accepted proxy formats, ambiguous-order disambiguation |
-| `cookies.test.ts` | JSON / Netscape / header parsing, HttpOnly + SameSite repair |
-| `fingerprint-args.test.ts` | fingerprint → argv, locale/timezone coupling, seed fallback |
-| `automation.test.ts` | the API over real HTTP: auth, every route, start idempotency, port release |
-| `cloakbrowser-api.test.ts` | pins upstream `binaryInfo` / `ensureBinary` signatures against the installed package |
-| `ipc-contract.test.ts` | every declared channel has a handler |
-| `preload-contract.test.ts` | bridge exposes exactly the declared surface |
-| `renderer-smoke.test.tsx` | app shell mounts in jsdom, navigation, launch wiring |
-| `license-key.test.ts` | key file encodings (UTF-16LE/BE, BOMs), normalisation, on-disk repair |
-| `migrate.test.ts` | forward-migration of stored profiles; backfill vs. deliberate choice |
-| `session-limit.test.ts` | plan seats vs. user preference, unknown-plan fallback |
-| `sandbox-args.test.ts` | when `--no-sandbox` is required, and the infobar suppression |
-| `ui-zoom.test.ts` | zoom snapping, stepping, clamping at both ends |
-| `search-engine.test.ts` | one-time seeding decision, `--lang` pin vs. pinned locale |
-| `import-folder.test.ts` | folder layouts, corrupt `Preferences`, zip-slip guard |
+| Windows | `%APPDATA%\CloakBrowserHub\` |
+| macOS | `~/Library/Application Support/CloakBrowserHub/` |
+| Linux | `~/.config/CloakBrowserHub/` |
 
-The renderer test uses `act()` from `preact/test-utils`. Preact defers
-`useEffect` behind `options.requestAnimationFrame`, which in jsdom is a real
-~16 ms timer — flushing microtasks alone leaves the shell stuck on `Loading…`.
-`act()` swaps both the rAF hook and the render debounce for queues it drains
-itself, making the flush deterministic instead of timing-dependent.
+`profiles.json` holds the profiles and folders; `settings.json` holds preferences.
+Profile browser data goes in a `profiles/` subdirectory, relocatable in Settings.
 
 ---
 
-## Limitations
+## History
 
-Worth knowing before relying on this:
+This project began as an Electron + Preact application. It is being rewritten in
+.NET 8 + Avalonia, and **the .NET implementation is now the basis of this
+repository** — a single toolchain, a single language, and a ~40 MB self-contained
+binary instead of a bundled Chromium runtime.
 
-- **Not yet validated against live detection suites.** The fingerprint switches
-  are unit-tested for correct argv construction, but no end-to-end run against
-  CreepJS, Pixelscan or a real target site has been done. Treat anti-detect
-  effectiveness as unverified.
-- **No master password.** Profile data and proxy credentials are stored on disk
-  unencrypted, under the OS user profile.
-- **No recorded/no-code action scripting.** The automation API exposes profile
-  and session control plus a CDP endpoint; writing the browser steps themselves
-  is left to your own Puppeteer/Playwright/Selenium code.
-- **License and binary download require network access** to `cloakbrowser.dev`,
-  and depend on that upstream API remaining stable.
-- **Unsigned builds.** No code-signing or notarisation is configured, so
-  installers will trigger OS warnings.
-- **The icon contains the Chrome logo.** It is the CloakBrowser hooded-cloak
-  mark with a `HUB` wordmark, and the disc inside the hood is the Google Chrome
-  logo, which is a Google trademark. Fine for private and internal use;
-  redistributing through an app store may not be.
-- **Only `.zip` profile archives are supported.** `.rar` and `.7z` would need a
-  native dependency; extract those yourself and use *Scan a folder…* instead.
-- **Search-engine seeding drives the settings UI.** It is the only method the
-  binary supports (see below), so it depends on `chrome://settings` internals. If
-  a future build changes them the profile simply keeps no default engine, logged
-  as a warning — it never blocks the launch.
+The rewrite is not finished. The Electron sources remain in `src/` and `tests/`
+precisely because they still implement things the .NET app does not: cookie
+import/export, the proxy library and checker, browser importers, the automation HTTP
+API, and — most importantly — actually launching a browser. Deleting them now would
+destroy the only working implementation of those features and the reference the port
+is being written against.
+
+They will be removed once the table in [What works today](#what-works-today) has no
+gaps left.
 
 ---
 
-## Notes on specific fixes
+## Limitations worth stating plainly
 
-Things that were reported as bugs and turned out to have non-obvious causes,
-recorded so they are not re-investigated from scratch:
-
-- **"License key is invalid" for a valid key.** PowerShell's `Set-Content` and
-  `>` write UTF-16LE by default, and both the upstream CLI
-  (`dist/license.js` reads with `utf-8`) and this app read the file as UTF-8 —
-  so the key arrived as `\uFFFD\uFFFDc\0b\0…`. The Hub now sniffs the BOM,
-  decodes UTF-16LE/BE, and rewrites the file as UTF-8 so the CLI and the binary
-  work too.
-- **Exit IP / timezone not detected behind a system-wide VPN.** Two causes:
-  `mmdb-lib` is an *optional* peer dependency of `cloakbrowser`, so `geoip: true`
-  threw when it was absent; and geoip had been gated on the profile having a
-  proxy. GeoIP resolves the egress IP through IP-echo services with no proxy at
-  all, which is exactly the system-VPN case. Both fixed; a geoip failure now
-  degrades to a warning instead of aborting the launch.
-- **BrowserScan reporting incognito on a "default" profile.** Not the flag
-  builder and not the default value — `profiles.json` was spread into the app
-  verbatim, so a profile written before `storageQuotaMb` existed had no value and
-  never emitted `--fingerprint-storage-quota`, while the editor displayed the
-  current default. Fixed with a versioned migration (`src/shared/migrate.ts`);
-  the default quota is now 120000 MB, which describes a plausible disk rather
-  than merely clearing the threshold.
-- **The `--no-sandbox` infobar.** The flag is hardcoded in the wrapper's
-  `getDefaultStealthArgs()`, and `buildArgs` deduplicates by flag *key*, so a
-  caller can override a value but never remove a default — `stealthArgs: false`
-  is the only lever. The Hub now supplies the equivalent flags itself and keeps
-  the renderer sandbox enabled wherever the kernel allows it, pairing
-  `--no-sandbox` with `--test-type` only where it is genuinely required. The bar
-  also cost ~40px of `innerHeight`, which was a fingerprint inconsistency on top
-  of being ugly.
-- **No default search engine.** The binary is de-Googled and ships no
-  prepopulated engine. `Default/Preferences` edits fail Chromium's protected-prefs
-  MAC check, the `Web Data` keywords table is overwritten on every startup, and
-  no CLI flag exists — so the only supported route is driving
-  `chrome://settings/searchEngines` once in a persistent profile. Done on first
-  launch per profile, with `--lang=en-US` pinned for a deterministic settings DOM
-  (skipped when the profile pins its own locale, since `--lang` feeds
-  `Accept-Language`).
+- **MAC address and device name do not affect your browser fingerprint.** No web API
+  exposes them — not `navigator`, not WebRTC, not WebGL. They change what the *local
+  network* sees. They are modelled because other tools offer them and users
+  reasonably ask, and the UI states the limitation rather than implying a benefit.
+- **Per-surface noise currently collapses to one flag.** The CloakBrowser binary
+  exposes a single `--fingerprint-noise` switch covering canvas, WebGL, audio and
+  client rects together. The four values are stored separately so the UI can already
+  offer the control users expect and a future binary needs no migration — but today
+  any surface asking for noise enables it for all of them.
+- **No fingerprint is undetectable.** A sufficiently determined site can detect that
+  values are being spoofed at all. The goal here is to stop *correlation* between
+  your profiles, which is a much more achievable and more useful property.
 
 ---
 
-## Legal
+## License
 
-Intended for legitimate multi-account work — QA, ad verification, web-scraping
-compliance, managing your own accounts across platforms. Using it to violate a
-site's terms of service, commit fraud or evade a ban is on you. Check the rules
-of any platform you point it at.
-
-## Licence
-
-Not yet chosen. All rights reserved for now.
+MIT.

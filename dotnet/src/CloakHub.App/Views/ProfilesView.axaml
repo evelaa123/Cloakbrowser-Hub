@@ -3,11 +3,23 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:CloakHub.App.ViewModels"
+             xmlns:views="using:CloakHub.App.Views"
+             xmlns:svc="using:CloakHub.App.Services"
              mc:Ignorable="d"
              x:Class="CloakHub.App.Views.ProfilesView"
              x:DataType="vm:ProfilesPageViewModel">
 
-  <Grid RowDefinitions="Auto,*">
+  <!--
+    A Panel at the root so the editor can cover the whole page.
+
+    The editor is a sibling that replaces the list rather than a child of it, because
+    it needs the full width: the summary rail alone is 300px, and nesting it inside
+    the list's layout would leave it competing with the folder sidebar for space it
+    does not need while the list is hidden anyway.
+  -->
+  <Panel>
+
+  <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsListVisible}">
 
     <!-- ================================================================
          Topbar: title, count, search, create
@@ -17,7 +29,11 @@
       <Grid ColumnDefinitions="*,Auto,Auto">
 
         <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
-          <TextBlock Classes="h1" Text="Profiles" />
+          <!--
+            The heading names the selected folder rather than being the fixed word
+            "Profiles", so a filtered list explains its own length.
+          -->
+          <TextBlock Classes="h1" Text="{Binding ScopeLabel}" />
           <TextBlock Classes="sub" Text="{Binding CountLabel}" />
         </StackPanel>
 
@@ -33,9 +49,92 @@
     </Border>
 
     <!-- ================================================================
-         Body
+         Body: folders on the left, the table on the right
          ================================================================ -->
-    <Panel Grid.Row="1">
+    <Grid Grid.Row="1" ColumnDefinitions="200,*">
+
+    <!-- ================================================================
+         Folders sidebar
+
+         A flat list, not a tree. The store models folders as a single level, and a
+         TreeView would promise nesting the data cannot express — dragging one folder
+         onto another would have nowhere to record the result.
+         ================================================================ -->
+    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,*" Margin="12,16,12,12">
+
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="2,0,0,8">
+          <TextBlock Grid.Column="0" Classes="th" Text="FOLDERS" VerticalAlignment="Center" />
+          <!-- Glyph rather than the word "New": the column is 200px and the label already claims most of it. -->
+          <Button Grid.Column="1" Classes="ghost" Content="+"
+                  Padding="8,1" FontSize="{DynamicResource FontSizeSmall}"
+                  ToolTip.Tip="New folder"
+                  Command="{Binding AddFolderCommand}" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Folders}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:FolderNodeViewModel">
+                <Panel Margin="0,0,0,1">
+
+                  <!-- Normal state: the row is a button, with the count on the right. -->
+                  <Button Classes="nav-item" Classes.active="{Binding IsSelected}"
+                          IsVisible="{Binding IsNotRenaming}"
+                          Command="{Binding SelectCommand}">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding CountLabel}"
+                                 Classes="faint mono" Margin="6,0,0,0"
+                                 FontSize="{DynamicResource FontSizeTiny}"
+                                 VerticalAlignment="Center" />
+                    </Grid>
+                    <!--
+                      Rename and delete live on the row's context menu rather than as
+                      always-visible buttons. At this width two icon buttons per row
+                      would leave almost nothing for the folder name, and both are
+                      rare actions compared with selecting.
+                    -->
+                    <Button.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Rename" IsEnabled="{Binding CanEdit}"
+                                  Command="{Binding BeginRenameCommand}" />
+                        <MenuItem Header="Delete" IsEnabled="{Binding CanEdit}"
+                                  Command="{Binding DeleteCommand}" />
+                      </ContextMenu>
+                    </Button.ContextMenu>
+                  </Button>
+
+                  <!--
+                    Rename state: the text box takes the row's place.
+
+                    Enter commits and Escape reverts, via KeyBindings rather than a
+                    pair of buttons, because the field is 200px wide and the two
+                    gestures are already universal for an inline edit.
+                  -->
+                  <TextBox IsVisible="{Binding IsRenaming}"
+                           Text="{Binding RenameDraft, Mode=TwoWay}"
+                           FontSize="{DynamicResource FontSizeSmall}"
+                           Padding="8,5"
+                           svc:FocusOnShow.Enabled="True">
+                    <TextBox.KeyBindings>
+                      <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
+                      <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
+                    </TextBox.KeyBindings>
+                  </TextBox>
+
+                </Panel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+      </Grid>
+    </Border>
+
+    <Panel Grid.Column="1">
 
       <!--
         Two distinct empty states. "No profiles at all" needs a call to action; "none
@@ -86,7 +185,7 @@
           CSS-derived styling for no benefit at six columns.
         -->
         <Border Grid.Row="0" Padding="12,0,12,8">
-          <Grid ColumnDefinitions="4,1.8*,100,1.8*,90,100,250">
+          <Grid ColumnDefinitions="4,1.8*,90,1.6*,85,90,190">
             <TextBlock Grid.Column="1" Classes="th" Text="NAME" />
             <TextBlock Grid.Column="2" Classes="th" Text="STATUS" />
             <TextBlock Grid.Column="3" Classes="th" Text="PROXY" />
@@ -101,7 +200,7 @@
               <Border Padding="12,9" Margin="0,0,0,2"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                 <!-- Must match the header definition above exactly. -->
-                <Grid ColumnDefinitions="4,1.8*,100,1.8*,90,100,250">
+                <Grid ColumnDefinitions="4,1.8*,90,1.6*,85,90,190">
 
                   <!-- Accent swatch: a fixed-width bar, so the column never goes ragged. -->
                   <Border Grid.Column="0" Width="3" CornerRadius="2"
@@ -110,15 +209,24 @@
                   <!-- Name, with tags underneath when present. -->
                   <StackPanel Grid.Column="1" Spacing="2" Margin="12,0,8,0"
                               VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="7">
-                      <TextBlock Text="{Binding Name}" FontWeight="Medium"
+                    <!--
+                      A Grid, not a horizontal StackPanel.
+
+                      A StackPanel measures its children with infinite width along its
+                      orientation, so TextTrimming never engaged and a long name drew
+                      straight over the status column instead of being ellipsised. A
+                      Grid gives the name a real constraint: a * column it must fit.
+                    -->
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="Medium"
                                  TextTrimming="CharacterEllipsis" />
                       <!-- The live instance number, matching the badge on the window. -->
-                      <TextBlock Text="{Binding InstanceLabel}" Classes="faint mono"
+                      <TextBlock Grid.Column="1" Text="{Binding InstanceLabel}"
+                                 Classes="faint mono" Margin="7,0,0,0"
                                  FontSize="{DynamicResource FontSizeTiny}"
                                  VerticalAlignment="Center"
                                  IsVisible="{Binding IsRunning}" />
-                    </StackPanel>
+                    </Grid>
                     <TextBlock Text="{Binding TagsLabel}" Classes="faint"
                                FontSize="{DynamicResource FontSizeTiny}"
                                TextTrimming="CharacterEllipsis"
@@ -157,12 +265,43 @@
                             FontSize="{DynamicResource FontSizeSmall}"
                             IsVisible="{Binding IsRunning}"
                             Command="{Binding StopCommand}" />
-                    <Button Classes="ghost" Content="Duplicate"
+                    <Button Content="Edit" Padding="12,4"
                             FontSize="{DynamicResource FontSizeSmall}"
-                            Command="{Binding DuplicateCommand}" />
-                    <Button Classes="ghost danger" Content="Delete"
+                            Command="{Binding EditCommand}" />
+                    <!--
+                      Duplicate, Move and Delete collapse into one overflow menu.
+
+                      Five buttons per row did not fit the 250px actions column, and
+                      Start/Edit are the two used constantly; the rest are occasional.
+                      The menu keeps the frequent pair full-size instead of shrinking
+                      everything to fit the rarest action.
+                    -->
+                    <Button Classes="ghost" Content="⋯" Padding="10,4"
                             FontSize="{DynamicResource FontSizeSmall}"
-                            Command="{Binding DeleteCommand}" />
+                            ToolTip.Tip="More actions">
+                      <Button.Flyout>
+                        <MenuFlyout>
+                          <MenuItem Header="Duplicate" Command="{Binding DuplicateCommand}" />
+                          <!--
+                            Each target carries its own bound command, so the submenu
+                            does not have to reach back out of the popup to find the
+                            row it belongs to. See MoveTargetViewModel.
+                          -->
+                          <MenuItem Header="Move to" ItemsSource="{Binding MoveTargets}">
+                            <MenuItem.ItemContainerTheme>
+                              <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                            x:DataType="vm:MoveTargetViewModel">
+                                <Setter Property="Header" Value="{Binding Name}" />
+                                <Setter Property="Command" Value="{Binding MoveCommand}" />
+                                <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+                              </ControlTheme>
+                            </MenuItem.ItemContainerTheme>
+                          </MenuItem>
+                          <Separator />
+                          <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
                   </StackPanel>
 
                 </Grid>
@@ -173,5 +312,14 @@
       </Grid>
 
     </Panel>
+    </Grid>
   </Grid>
+
+  <!-- ==================================================================
+       The editor, covering the page while it is open
+       ================================================================== -->
+  <views:ProfileEditorView DataContext="{Binding Editor}"
+                           IsVisible="{Binding $parent[UserControl].((vm:ProfilesPageViewModel)DataContext).IsEditorOpen}" />
+
+  </Panel>
 </UserControl>
