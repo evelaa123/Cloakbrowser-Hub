@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="4.150.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" />
+  </ItemGroup>
+
+  <!--
+    Embedded rather than copied next to the executable. The badge renderer needs
+    the base icon at launch time, and a single-file publish - which is what the
+    user will actually download - has no reliable directory to read a loose PNG
+    from. Embedding removes the failure mode entirely.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\app-icon.png" LogicalName="CloakHub.Core.Assets.app-icon.png" />
+  </ItemGroup>
+
+</Project>
