@@ -17,7 +17,12 @@ export default defineConfig({
       outDir: 'dist/main',
       lib: { entry: resolve('src/main/index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' },
       rollupOptions: {
-        external: ['electron', 'cloakbrowser', 'playwright-core'],
+        // These must stay external, not bundled:
+        //  - cloakbrowser / playwright-core spawn a real binary and resolve
+        //    paths relative to their own package location.
+        //  - undici must be a single instance shared with fetch-socks; two
+        //    bundled copies cannot exchange dispatchers.
+        external: ['electron', 'cloakbrowser', 'playwright-core', 'undici', 'fetch-socks'],
       },
     },
   },

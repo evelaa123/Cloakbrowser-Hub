@@ -8,6 +8,7 @@
 
 import type {
   AppSettings,
+  AutomationSettings,
   BehaviourConfig,
   FingerprintConfig,
   FingerprintPlatform,
@@ -236,7 +237,34 @@ export function defaultSettings(): AppSettings {
     closeSessionsOnQuit: true,
     theme: 'dark',
     defaultPlatform: 'windows',
+    automation: defaultAutomation(),
   };
+}
+
+/**
+ * Automation API defaults: off, with a token already generated.
+ *
+ * Off by default because it opens a local port that can drive real browser
+ * sessions - that should be an explicit choice, not something a fresh install
+ * starts doing silently. The token is minted up front so enabling it can never
+ * leave an unauthenticated port listening, even for one render.
+ */
+export function defaultAutomation(): AutomationSettings {
+  return { enabled: false, port: 3777, token: automationToken() };
+}
+
+/** 32 hex chars (128 bits) from the platform CSPRNG. */
+export function automationToken(): string {
+  const g = globalThis as {
+    crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array };
+  };
+  if (g.crypto?.getRandomValues) {
+    const bytes = g.crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // Math.random is not a CSPRNG. Reachable only on a runtime with no WebCrypto,
+  // which Electron and Node 20 both have, so this is a last-resort guard.
+  return cryptoId() + cryptoId();
 }
 
 export function newProfile(
