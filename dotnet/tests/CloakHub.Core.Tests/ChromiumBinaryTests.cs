@@ -48,19 +48,49 @@ public sealed class ChromiumBinaryTests : IDisposable
     // ------------------------------------------------------------------
 
     [Theory]
-    [InlineData("chromium-140.0.7339.207", "140.0.7339.207")]
-    [InlineData("chromium-99.0.1.2", "99.0.1.2")]
-    [InlineData("chromium-140.0.7339.207-pro", "140.0.7339.207")]
-    [InlineData("chromium-131.0", "131.0")]
-    public void Parses_the_version_out_of_a_cache_directory_name(string dir, string expected) =>
-        Assert.Equal(Version.Parse(expected), ChromiumBinary.ParseVersion(dir));
+    [InlineData("chromium-140.0.7339.207", new[] { 140, 0, 7339, 207 })]
+    [InlineData("chromium-99.0.1.2", new[] { 99, 0, 1, 2 })]
+    [InlineData("chromium-140.0.7339.207-pro", new[] { 140, 0, 7339, 207 })]
+    [InlineData("chromium-131.0", new[] { 131, 0 })]
+    public void Parses_the_version_out_of_a_cache_directory_name(string dir, int[] expected) =>
+        Assert.Equal(expected, ChromiumBinary.ParseVersion(dir));
+
+    [Theory]
+    [InlineData("chromium-148.0.7778.215.2-pro", new[] { 148, 0, 7778, 215, 2 })]
+    [InlineData("chromium-150.0.7871.114.3-pro", new[] { 150, 0, 7871, 114, 3 })]
+    public void Parses_the_five_component_versions_CloakBrowser_actually_ships(
+        string dir, int[] expected)
+    {
+        // The shipped naming carries a fifth component -- the stealth patch level --
+        // and System.Version accepts at most four. Every real directory name failed
+        // to parse, so this is the case the production code lives on, not an edge.
+        Assert.Equal(expected, ChromiumBinary.ParseVersion(dir));
+    }
 
     [Fact]
     public void An_unparseable_directory_name_sorts_last_rather_than_throwing()
     {
         // A stray directory in the cache -- a partial download, a user's own folder --
         // must not take the whole resolution down with it.
-        Assert.Equal(new Version(0, 0), ChromiumBinary.ParseVersion("chromium-nightly"));
+        Assert.Empty(ChromiumBinary.ParseVersion("chromium-nightly"));
+    }
+
+    [Fact]
+    public void A_trailing_non_numeric_component_stops_the_parse_without_losing_the_prefix()
+    {
+        // "148.0-rc1" splits into "148" and "0-rc1", so the parse keeps 148 and
+        // stops -- the point is that the recognisable prefix survives and the
+        // suffix contributes nothing, not that every component is recovered.
+        Assert.Equal(new[] { 148 }, ChromiumBinary.ParseVersion("chromium-148.0-rc1"));
+
+        // Truncation costs no ordering accuracy here: absent components compare as
+        // zero, so the short parse still ranks exactly where 148.0 would.
+        Assert.Equal(0, ChromiumBinary.CompareVersions(
+            ChromiumBinary.ParseVersion("chromium-148.0-rc1"),
+            ChromiumBinary.ParseVersion("chromium-148.0")));
+        Assert.True(ChromiumBinary.CompareVersions(
+            ChromiumBinary.ParseVersion("chromium-148.0-rc1"),
+            ChromiumBinary.ParseVersion("chromium-147.9")) > 0);
     }
 
     [Fact]
@@ -79,10 +109,38 @@ public sealed class ChromiumBinaryTests : IDisposable
     }
 
     [Fact]
+    public void Launches_the_newer_build_when_both_versions_have_five_components()
+    {
+        // Reported from the field: the settings page showed 148 installed and
+        // announced 150 as available, and launching still started 148. The banner
+        // compares version strings for inequality so it was right; the resolver
+        // sorted on a parse that failed identically for both, so every candidate
+        // tied and enumeration order decided. Same shape as the screenshot.
+        Build("chromium-148.0.7778.215.2-pro");
+        var newest = Build("chromium-150.0.7871.114.3-pro");
+
+        Assert.Equal(newest, ChromiumBinary.Resolve(Env()).Path);
+    }
+
+    [Fact]
+    public void A_fifth_component_makes_a_build_newer_than_the_same_build_without_one()
+    {
+        // 148.0.7778.215.2 is a respin of 148.0.7778.215, not a different release,
+        // so the one carrying the patch level has to win.
+        Build("chromium-148.0.7778.215");
+        var patched = Build("chromium-148.0.7778.215.2");
+
+        Assert.Equal(patched, ChromiumBinary.Resolve(Env()).Path);
+    }
+
+    [Fact]
     public void Prefers_a_pro_build_over_a_newer_standard_one()
     {
         // Someone holding a licence expects to be running the build they paid for,
-        // even when a newer free build happens to be sitting beside it.
+        // even when a newer free build happens to be sitting beside it. The tiers
+        // are different patch sets rather than two points on one timeline, so
+        // crossing between them to gain a version would move a profile onto a
+        // fingerprint surface it was never built against.
         var pro = Build("chromium-131.0.0.1-pro");
         Build("chromium-140.0.7339.207");
 
