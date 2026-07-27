@@ -146,7 +146,10 @@ public static partial class CookieSanitiser
     [GeneratedRegex(@"(^|\.)youtube\.com$", RegexOptions.IgnoreCase)]
     private static partial Regex YouTubeRe();
 
-    [GeneratedRegex(@"(^|\.)google\.[a-z.]+$", RegexOptions.IgnoreCase)]
+    // At most two trailing labels, so this covers the ccTLDs (google.co.uk,
+    // google.de) without matching google.com.evil.net — an attacker-registered
+    // lookalike that a greedier [a-z.]+ would hand SameSite=None to.
+    [GeneratedRegex(@"(^|\.)google\.[a-z]{2,}(\.[a-z]{2,})?$", RegexOptions.IgnoreCase)]
     private static partial Regex GoogleTldRe();
 
     [GeneratedRegex(@"(^|\.)facebook\.com$", RegexOptions.IgnoreCase)]
@@ -179,7 +182,8 @@ public static partial class CookieSanitiser
     [GeneratedRegex(@"(^|\.)paypal\.com$", RegexOptions.IgnoreCase)]
     private static partial Regex PayPalRe();
 
-    [GeneratedRegex(@"(^|\.)amazon\.[a-z.]+$", RegexOptions.IgnoreCase)]
+    // Bounded for the same reason as the Google ccTLD pattern above.
+    [GeneratedRegex(@"(^|\.)amazon\.[a-z]{2,}(\.[a-z]{2,})?$", RegexOptions.IgnoreCase)]
     private static partial Regex AmazonRe();
 
     [GeneratedRegex(@"(^|\.)doubleclick\.net$", RegexOptions.IgnoreCase)]
