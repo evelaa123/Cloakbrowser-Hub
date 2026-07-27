@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:CloakHub.App.ViewModels"
+             xmlns:c="using:CloakHub.App.Controls"
              mc:Ignorable="d"
              x:Class="CloakHub.App.Views.ProfileEditorView"
              x:DataType="vm:ProfileEditorViewModel">
@@ -85,8 +86,8 @@
                              FontSize="{DynamicResource FontSizeTiny}" />
                 </StackPanel>
 
-                <Grid ColumnDefinitions="*,*">
-                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                <c:FormPair>
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="STATUS" />
                     <ComboBox ItemsSource="{Binding StatusChoices}"
                               SelectedItem="{Binding Status, Mode=TwoWay}"
@@ -102,7 +103,7 @@
                                Text="Your own label. Separate from whether a browser is running." />
                   </StackPanel>
 
-                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="CATEGORY" />
                     <ComboBox ItemsSource="{Binding KindChoices}"
                               SelectedItem="{Binding Kind, Mode=TwoWay}"
@@ -117,7 +118,7 @@
                                FontSize="{DynamicResource FontSizeTiny}"
                                Text="A reminder for you. It changes no launch setting." />
                   </StackPanel>
-                </Grid>
+                </c:FormPair>
 
                 <StackPanel Spacing="5">
                   <TextBlock Classes="th" Text="FOLDER" />
@@ -205,8 +206,8 @@
                           VerticalAlignment="Bottom" Command="{Binding NewFingerprintCommand}" />
                 </Grid>
 
-                <Grid ColumnDefinitions="*,*">
-                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                <c:FormPair>
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="OPERATING SYSTEM" />
                     <ComboBox ItemsSource="{Binding PlatformChoices}"
                               SelectedItem="{Binding Platform, Mode=TwoWay}"
@@ -222,7 +223,7 @@
                                Text="What sites see, regardless of your real OS. Changing it re-picks the screen and GPU so they cannot contradict each other." />
                   </StackPanel>
 
-                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="OS VERSION" />
                     <ComboBox ItemsSource="{Binding PlatformVersionChoices}"
                               SelectedItem="{Binding PlatformVersion, Mode=TwoWay}"
@@ -231,10 +232,10 @@
                                FontSize="{DynamicResource FontSizeTiny}"
                                Text="Client Hints platform version." />
                   </StackPanel>
-                </Grid>
+                </c:FormPair>
 
-                <Grid ColumnDefinitions="*,*">
-                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                <c:FormPair>
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="BROWSER BRAND" />
                     <ComboBox ItemsSource="{Binding BrandChoices}"
                               SelectedItem="{Binding Brand, Mode=TwoWay}"
@@ -246,12 +247,12 @@
                       </ComboBox.ItemTemplate>
                     </ComboBox>
                   </StackPanel>
-                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="BRAND VERSION" />
                     <TextBox Text="{Binding BrandVersion, Mode=TwoWay}"
                              Watermark="blank = match the binary" />
                   </StackPanel>
-                </Grid>
+                </c:FormPair>
               </StackPanel>
             </Border>
 
@@ -274,18 +275,18 @@
                 </StackPanel>
 
                 <StackPanel Spacing="10" IsVisible="{Binding IsScreenManual}">
-                  <Grid ColumnDefinitions="*,*">
-                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                  <c:FormPair>
+                    <StackPanel Spacing="5">
                       <TextBlock Classes="th" Text="WIDTH" />
                       <NumericUpDown Value="{Binding ScreenWidth, Mode=TwoWay}"
                                      Minimum="320" Maximum="7680" Increment="1" FormatString="0" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <StackPanel Spacing="5">
                       <TextBlock Classes="th" Text="HEIGHT" />
                       <NumericUpDown Value="{Binding ScreenHeight, Mode=TwoWay}"
                                      Minimum="240" Maximum="4320" Increment="1" FormatString="0" />
                     </StackPanel>
-                  </Grid>
+                  </c:FormPair>
 
                   <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="COMMON FOR THIS PLATFORM" />
@@ -365,8 +366,8 @@
               <StackPanel Spacing="14">
                 <TextBlock Text="Hardware" FontWeight="SemiBold" />
 
-                <Grid ColumnDefinitions="*,*">
-                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                <c:FormPair>
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="CPU CORES" />
                     <ComboBox ItemsSource="{Binding ValueModes}"
                               SelectedItem="{Binding CpuMode, Mode=TwoWay}"
@@ -386,7 +387,7 @@
                                Text="navigator.hardwareConcurrency" />
                   </StackPanel>
 
-                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="DEVICE MEMORY (GB)" />
                     <ComboBox ItemsSource="{Binding ValueModes}"
                               SelectedItem="{Binding MemoryMode, Mode=TwoWay}"
@@ -405,7 +406,7 @@
                                FontSize="{DynamicResource FontSizeTiny}"
                                Text="Powers of two only — the API buckets real RAM, so 12 is not a value a browser can report." />
                   </StackPanel>
-                </Grid>
+                </c:FormPair>
               </StackPanel>
             </Border>
 
@@ -419,56 +420,65 @@
                              Text="{Binding NoiseNote}" />
                 </StackPanel>
 
-                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                  <StackPanel Grid.Row="0" Grid.Column="0" Spacing="5" Margin="0,0,10,10">
-                    <TextBlock Classes="th" Text="CANVAS" />
-                    <ComboBox ItemsSource="{Binding NoiseModes}"
-                              SelectedItem="{Binding CanvasNoise, Mode=TwoWay}"
-                              HorizontalAlignment="Stretch">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
-                        </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                  </StackPanel>
-                  <StackPanel Grid.Row="0" Grid.Column="1" Spacing="5" Margin="10,0,0,10">
-                    <TextBlock Classes="th" Text="WEBGL" />
-                    <ComboBox ItemsSource="{Binding NoiseModes}"
-                              SelectedItem="{Binding WebGlNoise, Mode=TwoWay}"
-                              HorizontalAlignment="Stretch">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
-                        </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                  </StackPanel>
-                  <StackPanel Grid.Row="1" Grid.Column="0" Spacing="5" Margin="0,0,10,0">
-                    <TextBlock Classes="th" Text="AUDIO" />
-                    <ComboBox ItemsSource="{Binding NoiseModes}"
-                              SelectedItem="{Binding AudioNoise, Mode=TwoWay}"
-                              HorizontalAlignment="Stretch">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
-                        </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                  </StackPanel>
-                  <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5" Margin="10,0,0,0">
-                    <TextBlock Classes="th" Text="CLIENT RECTS" />
-                    <ComboBox ItemsSource="{Binding NoiseModes}"
-                              SelectedItem="{Binding ClientRectsNoise, Mode=TwoWay}"
-                              HorizontalAlignment="Stretch">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                          <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
-                        </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                  </StackPanel>
-                </Grid>
+                <!--
+                  Two pairs rather than one 2x2 grid. The grid divided whatever width it
+                  was given, so these four labels were clipped on a narrow window; as
+                  pairs they stack independently and each keeps its full label.
+                -->
+                <StackPanel Spacing="10">
+                  <c:FormPair>
+                    <StackPanel Spacing="5">
+                      <TextBlock Classes="th" Text="CANVAS" />
+                      <ComboBox ItemsSource="{Binding NoiseModes}"
+                                SelectedItem="{Binding CanvasNoise, Mode=TwoWay}"
+                                HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                    </StackPanel>
+                    <StackPanel Spacing="5">
+                      <TextBlock Classes="th" Text="WEBGL" />
+                      <ComboBox ItemsSource="{Binding NoiseModes}"
+                                SelectedItem="{Binding WebGlNoise, Mode=TwoWay}"
+                                HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                    </StackPanel>
+                  </c:FormPair>
+                  <c:FormPair>
+                    <StackPanel Spacing="5">
+                      <TextBlock Classes="th" Text="AUDIO" />
+                      <ComboBox ItemsSource="{Binding NoiseModes}"
+                                SelectedItem="{Binding AudioNoise, Mode=TwoWay}"
+                                HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                    </StackPanel>
+                    <StackPanel Spacing="5">
+                      <TextBlock Classes="th" Text="CLIENT RECTS" />
+                      <ComboBox ItemsSource="{Binding NoiseModes}"
+                                SelectedItem="{Binding ClientRectsNoise, Mode=TwoWay}"
+                                HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static vm:Converters.NoiseModeName}}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                    </StackPanel>
+                  </c:FormPair>
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -507,8 +517,8 @@
               <StackPanel Spacing="14">
                 <TextBlock Text="Other" FontWeight="SemiBold" />
 
-                <Grid ColumnDefinitions="*,*">
-                  <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                <c:FormPair>
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="STORAGE QUOTA (MB)" />
                     <NumericUpDown Value="{Binding StorageQuotaMb, Mode=TwoWay}"
                                    Minimum="0" Maximum="10000000" Increment="1000" FormatString="0" />
@@ -516,7 +526,7 @@
                                FontSize="{DynamicResource FontSizeTiny}"
                                Text="A small quota is what detectors read as an incognito window. Blank hands control back to the browser." />
                   </StackPanel>
-                  <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                  <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="TASKBAR HEIGHT (PX)" />
                     <NumericUpDown Value="{Binding TaskbarHeight, Mode=TwoWay}"
                                    Minimum="0" Maximum="400" Increment="1" FormatString="0" />
@@ -524,7 +534,7 @@
                                FontSize="{DynamicResource FontSizeTiny}"
                                Text="Affects screen.availHeight coherence." />
                   </StackPanel>
-                </Grid>
+                </c:FormPair>
 
                 <CheckBox Content="Allow third-party cookies"
                           IsChecked="{Binding AllowThirdPartyCookies, Mode=TwoWay}" />
@@ -615,17 +625,17 @@
                       </StackPanel>
                     </Grid>
 
-                    <Grid ColumnDefinitions="*,*">
-                      <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                    <c:FormPair>
+                      <StackPanel Spacing="5">
                         <TextBlock Classes="th" Text="USERNAME" />
                         <TextBox Text="{Binding ProxyUsername, Mode=TwoWay}" />
                       </StackPanel>
-                      <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                      <StackPanel Spacing="5">
                         <TextBlock Classes="th" Text="PASSWORD" />
                         <TextBox Text="{Binding ProxyPassword, Mode=TwoWay}"
                                  PasswordChar="•" />
                       </StackPanel>
-                    </Grid>
+                    </c:FormPair>
 
                     <Border Classes="callout warn">
                       <TextBlock Text="{Binding ProxySecretNote}" TextWrapping="Wrap"
@@ -830,16 +840,16 @@
                 </StackPanel>
 
                 <StackPanel Spacing="14" IsVisible="{Binding IsLocaleManual}">
-                  <Grid ColumnDefinitions="*,*">
-                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                  <c:FormPair>
+                    <StackPanel Spacing="5">
                       <TextBlock Classes="th" Text="LOCALE" />
                       <TextBox Text="{Binding Locale, Mode=TwoWay}" Watermark="en-US" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <StackPanel Spacing="5">
                       <TextBlock Classes="th" Text="TIMEZONE" />
                       <TextBox Text="{Binding Timezone, Mode=TwoWay}" Watermark="America/New_York" />
                     </StackPanel>
-                  </Grid>
+                  </c:FormPair>
 
                   <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="MATCHED PRESETS" />
@@ -930,18 +940,18 @@
                     </ComboBox>
                   </StackPanel>
 
-                  <Grid ColumnDefinitions="*,*">
-                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                  <c:FormPair>
+                    <StackPanel Spacing="5">
                       <TextBlock Classes="th" Text="TYPING DELAY (MS/CHAR)" />
                       <TextBox Text="{Binding TypingDelay, Mode=TwoWay}"
                                Watermark="blank = preset default" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                    <StackPanel Spacing="5">
                       <TextBlock Classes="th" Text="MISTYPE CHANCE (0–1)" />
                       <TextBox Text="{Binding MistypeChance, Mode=TwoWay}"
                                Watermark="0.02" />
                     </StackPanel>
-                  </Grid>
+                  </c:FormPair>
 
                   <CheckBox Content="Idle pauses between actions"
                             IsChecked="{Binding IdleBetweenActions, Mode=TwoWay}" />

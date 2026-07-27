@@ -67,7 +67,12 @@ public sealed class ProfileImporter
         CloneResult? clone = null;
         if (cloneData)
         {
-            clone = ProfileCloner.Clone(source.Path, _dataDirFor(profile.Id));
+            // TargetFor, not the raw data dir. _dataDirFor returns the profile's
+            // --user-data-dir; Chromium reads its actual profile from the Default
+            // subdirectory beneath it. Cloning into the root put every cookie one
+            // level above where the browser looks, so the import copied hundreds
+            // of megabytes, reported success, and produced a logged-out profile.
+            clone = ProfileCloner.Clone(source.Path, ProfileCloner.TargetFor(_dataDirFor(profile.Id)));
             if (!clone.Ok)
             {
                 // Nothing is written to the store on a failed clone. Leaving an

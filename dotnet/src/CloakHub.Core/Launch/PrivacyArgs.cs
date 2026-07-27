@@ -71,35 +71,67 @@ public static class PrivacyArgs
     /// <summary>
     /// Build the privacy flags for a profile.
     /// <para>
-    /// Port blocking is expressed as a host-resolver rule that maps the
-    /// loopback names to an unroutable address, which is the only mechanism
-    /// available through argv alone. This is a deliberate trade-off and the
-    /// UI must describe it honestly: it blocks <i>page-initiated</i> probes of
-    /// localhost, and it does not attempt to defeat a determined WebRTC or
-    /// extension-based probe. The alternative — intercepting each request over
-    /// CDP — needs a live connection per session and cannot be previewed as
-    /// argv, so it belongs in the session layer, not here.
+    /// Port blocking no longer emits <c>--host-resolver-rules</c>. That flag was
+    /// removed for two independent reasons, either of which would be enough:
+    /// </para>
+    /// <list type="number">
+    ///   <item>
+    ///   <b>It is on Chromium's bad-flags list.</b> Passing it raises the yellow
+    ///   "You are using an unsupported command-line flag" banner on every launch.
+    ///   That banner is a far worse outcome than the probe it was defending
+    ///   against: it steals ~40px of viewport, so <c>innerHeight</c> stops
+    ///   matching what a real maximised Chrome on the spoofed screen size would
+    ///   report. A profile that carefully spoofs 1920x1080 and then reports an
+    ///   off-by-40 viewport is <i>more</i> identifiable, not less — the same
+    ///   reasoning <see cref="SandboxArgs"/> already applies to <c>--no-sandbox</c>.
+    ///   </item>
+    ///   <item>
+    ///   <b>Half of it never worked.</b> Host-resolver rules run in the DNS
+    ///   resolver, and the resolver is not consulted for IP literals. The
+    ///   <c>MAP 127.0.0.1:&lt;port&gt;</c> half of the rule set was therefore a
+    ///   no-op, and a page could reach any "blocked" port simply by asking for
+    ///   <c>http://127.0.0.1:3389</c> instead of <c>http://localhost:3389</c>.
+    ///   The setting promised protection it did not provide.
+    ///   </item>
+    /// </list>
+    /// <para>
+    /// Blocking loopback properly needs request interception over CDP, which
+    /// requires a live per-session connection and cannot be expressed as argv.
+    /// That belongs in the session layer, not here. Until it exists, the
+    /// honest thing is to emit nothing and say so — see
+    /// <see cref="PortBlockingNotice"/>, which the UI surfaces so the setting
+    /// cannot quietly look active while doing nothing.
     /// </para>
     /// </summary>
     public static List<string> Build(Profile profile)
     {
         var args = new List<string>();
-        var ports = NormalisePorts(profile.Startup.BlockedPorts);
-
-        if (ports.Count > 0)
-        {
-            // Chromium accepts a comma-separated map of host patterns. Sending
-            // loopback lookups to 0.0.0.0 makes the connection fail fast, which
-            // is what a firewalled port looks like from the page's side.
-            var rules = string.Join(",",
-                ports.Select(p => $"MAP localhost:{p.ToString(CultureInfo.InvariantCulture)} ~NOTFOUND")
-                     .Concat(ports.Select(p => $"MAP 127.0.0.1:{p.ToString(CultureInfo.InvariantCulture)} ~NOTFOUND")));
-            args.Add($"--host-resolver-rules={rules}");
-        }
 
         if (profile.Startup.DoNotTrack)
             args.Add("--enable-do-not-track");
 
         return args;
+    }
+
+    /// <summary>
+    /// Explanation for a profile that asks for blocked ports, or null when it
+    /// does not.
+    /// <para>
+    /// Returned rather than logged here so the caller decides where it belongs —
+    /// the session log on launch, and the editor beside the field. A security
+    /// control that silently does nothing is worse than one that is absent,
+    /// because the user stops looking for the risk.
+    /// </para>
+    /// </summary>
+    public static string? PortBlockingNotice(Profile profile)
+    {
+        var ports = NormalisePorts(profile.Startup.BlockedPorts);
+        if (ports.Count == 0) return null;
+
+        return
+            $"Localhost port blocking ({string.Join(", ", ports.Select(p => p.ToString(CultureInfo.InvariantCulture)))}) " +
+            "is not applied to this session. It relied on --host-resolver-rules, which Chromium flags as " +
+            "unsupported — the resulting banner shrinks the viewport and makes the profile easier to " +
+            "identify than the port probe it blocked, and the rule never covered 127.0.0.1 in the first place.";
     }
 }

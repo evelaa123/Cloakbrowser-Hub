@@ -18,31 +18,43 @@ public class PrivacyArgsTests
     }
 
     [Fact]
-    public void Blocked_ports_produce_a_host_resolver_rule()
+    public void Blocked_ports_no_longer_emit_the_unsupported_resolver_flag()
     {
-        var args = PrivacyArgs.Build(WithPorts(3389));
-        var rule = Assert.Single(args);
-        Assert.StartsWith("--host-resolver-rules=", rule);
-        Assert.Contains("localhost:3389", rule);
-        Assert.Contains("127.0.0.1:3389", rule);
+        // --host-resolver-rules is on Chromium's bad-flags list, so passing it
+        // raised the "unsupported command-line flag" banner on every launch. That
+        // banner costs ~40px of viewport, which desynchronises innerHeight from
+        // the spoofed screen size and makes the profile MORE identifiable than
+        // the localhost probe the flag was blocking.
+        Assert.Empty(PrivacyArgs.Build(WithPorts(3389)));
     }
 
     [Fact]
-    public void Both_loopback_spellings_are_covered()
+    public void A_profile_with_blocked_ports_is_told_they_are_not_enforced()
     {
-        // A page can reach the same service by name or by literal address; only
-        // covering one leaves the probe working through the other.
-        var rule = PrivacyArgs.Build(WithPorts(5900))[0];
-        Assert.Contains("MAP localhost:5900", rule);
-        Assert.Contains("MAP 127.0.0.1:5900", rule);
+        // The setting is retained but inert. Saying so is the whole point: a
+        // security control that silently does nothing is worse than an absent
+        // one, because the user stops treating the risk as open.
+        var notice = PrivacyArgs.PortBlockingNotice(WithPorts(3389, 5900));
+
+        Assert.NotNull(notice);
+        Assert.Contains("3389", notice);
+        Assert.Contains("5900", notice);
     }
 
     [Fact]
-    public void Ports_are_sorted_so_the_argv_preview_is_stable()
+    public void A_profile_without_blocked_ports_gets_no_notice()
     {
-        var a = PrivacyArgs.Build(WithPorts(5900, 3389, 7070))[0];
-        var b = PrivacyArgs.Build(WithPorts(7070, 3389, 5900))[0];
-        Assert.Equal(a, b);
+        Assert.Null(PrivacyArgs.PortBlockingNotice(new Profile { Id = "p" }));
+    }
+
+    [Fact]
+    public void The_notice_lists_ports_in_a_stable_order()
+    {
+        // Same reasoning the argv preview had: a message that reorders between
+        // renders is useless for comparing two profiles.
+        Assert.Equal(
+            PrivacyArgs.PortBlockingNotice(WithPorts(5900, 3389, 7070)),
+            PrivacyArgs.PortBlockingNotice(WithPorts(7070, 3389, 5900)));
     }
 
     [Fact]
