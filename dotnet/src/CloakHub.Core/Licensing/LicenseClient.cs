@@ -79,6 +79,19 @@ public sealed class LicenseClient : IDisposable
         return body?.Active;
     }
 
+    /// <summary>
+    /// Why the last call returned null, when it did.
+    /// <para>
+    /// Recorded because the callers of this class can only see "null", and null
+    /// is rendered to the user as a network problem. A bug on our side that also
+    /// produces null therefore reaches the user disguised as their Wi-Fi — which
+    /// is exactly how the <c>Expires</c> property-name collision survived: it
+    /// threw on every single call and looked like an outage. Keeping the reason
+    /// means the panel can say something true instead.
+    /// </para>
+    /// </summary>
+    public string? LastFailure { get; private set; }
+
     private async Task<T?> PostAsync<T>(string url, string key, CancellationToken cancel)
         where T : class
     {
@@ -88,11 +101,18 @@ public sealed class LicenseClient : IDisposable
                 .PostAsJsonAsync(url, new KeyRequest(key), JsonOpts, cancel)
                 .ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode)
+            {
+                LastFailure = $"The license server answered HTTP {(int)response.StatusCode}.";
+                return null;
+            }
 
-            return await response.Content
+            var body = await response.Content
                 .ReadFromJsonAsync<T>(JsonOpts, cancel)
                 .ConfigureAwait(false);
+
+            LastFailure = body is null ? "The license server sent an empty response." : null;
+            return body;
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
@@ -100,11 +120,21 @@ public sealed class LicenseClient : IDisposable
             // as one would leave the panel showing a spurious error.
             throw;
         }
-        catch
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or TimeoutException)
         {
-            // DNS failure, TLS failure, timeout, malformed JSON: from the user's
-            // side these are all "we could not tell", and none of them says
-            // anything about whether the key is good.
+            // DNS failure, TLS failure, timeout. From the user's side these are
+            // all "we could not tell", and none of them says anything about
+            // whether the key is good.
+            LastFailure = null;
+            return null;
+        }
+        catch (Exception e)
+        {
+            // Anything else is a bug here, not a problem with the user's network:
+            // a JSON contract mismatch, a serializer misconfiguration. Still
+            // non-fatal — a broken licence panel must not take the app down — but
+            // named, so it stops masquerading as an outage.
+            LastFailure = $"The license response could not be read ({e.GetType().Name}: {e.Message}).";
             return null;
         }
     }
@@ -133,6 +163,17 @@ public sealed class LicenseClient : IDisposable
         [JsonPropertyName("expires")]
         public JsonElement ExpiresRaw { get; set; }
 
+        // [JsonIgnore] is load-bearing, not tidiness. This property is named
+        // `Expires`, and ExpiresRaw above claims the JSON name "expires". Under
+        // PropertyNameCaseInsensitive both resolve to the same name, and
+        // System.Text.Json refuses the whole type with "The JSON property name
+        // for 'ValidateResponse.Expires' collides with another property."
+        //
+        // That throw happened on *every* validate call. PostAsync's catch turned
+        // it into null, and LicenseService renders null as "could not reach the
+        // license server" — so a perfectly healthy HTTP 200 was reported to the
+        // user as a network outage, and no key could ever verify.
+        [JsonIgnore]
         public string? Expires => ExpiresRaw.ValueKind switch
         {
             JsonValueKind.String => ExpiresRaw.GetString(),

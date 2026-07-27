@@ -1029,9 +1029,25 @@ public sealed class ProfileEditorViewModel : ViewModelBase
         });
     }
 
+    /// <summary>
+    /// Explains why this field currently does nothing.
+    /// <para>
+    /// It previously promised that the listed ports were blocked. They were not:
+    /// the mechanism was <c>--host-resolver-rules</c>, which Chromium reports as
+    /// an unsupported flag — raising a banner that shrinks the viewport and makes
+    /// the profile easier to fingerprint than the probe it prevented — and which
+    /// never applied to <c>127.0.0.1</c> at all, since the DNS resolver is not
+    /// consulted for IP literals. Telling the user the ports are protected when
+    /// they are reachable is the worse of the two failures, so the note now says
+    /// what is actually true.
+    /// </para>
+    /// </summary>
     public string PortsNote =>
         "Sites can probe localhost ports to recognise your machine across profiles. "
-        + "Blocking the remote-access ports above is also what a typical firewall does.";
+        + "This list is not enforced right now: the flag it relied on is rejected by Chromium, "
+        + "and it never covered 127.0.0.1. Your list is kept and will apply once blocking moves "
+        + "to request interception. Close remote-access services, or block them in your firewall, "
+        + "if this matters for a profile.";
 
     // ------------------------------------------------------------------
     // Advanced: MAC and device name

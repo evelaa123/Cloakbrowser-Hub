@@ -63,10 +63,26 @@ public sealed class ChromiumLauncherTests : IDisposable
         // Setting only --lang leaves Accept-Language on the host's real languages
         // while JavaScript reports the spoofed one. That mismatch is a single
         // request to detect and points straight at a spoofed profile.
+        //
+        // The header is a q-value chain, not the bare tag: no shipping browser
+        // sends a single-entry Accept-Language, so "de-DE" alone would trade one
+        // recognisable signature for another.
         var args = Args(new LaunchRequest { Locale = "de-DE" });
 
         Assert.Contains("--lang=de-DE", args);
-        Assert.Contains("--accept-lang=de-DE", args);
+        Assert.Contains("--accept-lang=de-DE,de;q=0.9,en;q=0.8", args);
+    }
+
+    [Fact]
+    public void The_profile_directory_is_stated_rather_than_left_to_the_default()
+    {
+        // The importer clones session data into <user-data-dir>/Default. If the
+        // browser is not told to read that same subdirectory, an imported profile
+        // starts logged out -- which is exactly what happened while this flag was
+        // implicit. Pinning it here keeps the two halves of the contract together.
+        var args = Args(new LaunchRequest());
+
+        Assert.Contains("--profile-directory=Default", args);
     }
 
     [Fact]

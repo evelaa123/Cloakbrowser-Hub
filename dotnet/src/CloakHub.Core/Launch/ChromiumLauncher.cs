@@ -126,7 +126,19 @@ public sealed class ChromiumLauncher(Func<BinaryResolution>? resolver = null) : 
     /// </summary>
     internal static List<string> BuildArgs(string userDataDir, LaunchRequest request)
     {
-        var args = new List<string> { $"--user-data-dir={userDataDir}" };
+        var args = new List<string>
+        {
+            $"--user-data-dir={userDataDir}",
+
+            // Stated explicitly rather than relying on Chromium's default. The
+            // importer writes cloned session data into this exact subdirectory,
+            // and the two agreeing is what makes an imported profile arrive
+            // logged in. Leaving it implicit is how they came to disagree in the
+            // first place — the clone landed in the user-data root, the browser
+            // read Default/, and the mismatch was invisible because Chromium
+            // simply created the missing profile and started clean.
+            $"--profile-directory={Import.ProfileCloner.ChromiumProfileDir}",
+        };
 
         // Already-resolved fingerprint, privacy and sandbox flags.
         args.AddRange(request.Args);
@@ -142,7 +154,12 @@ public sealed class ChromiumLauncher(Func<BinaryResolution>? resolver = null) : 
             // Without this the Accept-Language header keeps the host's languages
             // while JavaScript reports the spoofed one — a mismatch that is trivial
             // to test for and points straight at a spoofed profile.
-            args.Add($"--accept-lang={request.Locale}");
+            //
+            // Sent as a full q-value list rather than the bare tag: no shipping
+            // browser emits a single-entry Accept-Language, so "de-AT" alone is
+            // itself a signature. GeoLocale builds the tag/language/en fallback
+            // chain a real browser in that locale would send.
+            args.Add($"--accept-lang={Network.GeoLocale.AcceptLanguage(request.Locale!)}");
         }
 
         if (!string.IsNullOrWhiteSpace(request.UserAgent))

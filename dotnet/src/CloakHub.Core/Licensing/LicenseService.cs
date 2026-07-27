@@ -96,7 +96,14 @@ public sealed class LicenseService : IDisposable
                 Tier = LicenseTier.Unknown,
                 CheckedAt = DateTimeOffset.UtcNow,
                 Seats = KnownPlanSeats,
-                Error = "Could not reach the license server. The saved key will still be used offline.",
+                // The client distinguishes "the network failed" from "we reached
+                // the server and could not read the answer". Both leave the key
+                // usable offline, but only the first is the user's to fix, and
+                // telling someone with working internet that their connection is
+                // down sends them to debug the wrong machine.
+                Error = _client.LastFailure is { Length: > 0 } why
+                    ? $"{why} The saved key will still be used offline."
+                    : "Could not reach the license server. The saved key will still be used offline.",
             });
         }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CloakHub.App.Services;
@@ -10,6 +11,7 @@ using CloakHub.Core.Cookies;
 using CloakHub.Core.Launch;
 using CloakHub.Core.Licensing;
 using CloakHub.Core.Model;
+using CloakHub.Core.Network;
 using CloakHub.Core.Platform;
 using CloakHub.Core.Storage;
 
@@ -510,7 +512,7 @@ public sealed class ProfilesPageViewModel : ViewModelBase
         {
             var result = await _sessions.StartAsync(
                 profile,
-                BuildRequest(profile),
+                await BuildRequestAsync(profile, ct).ConfigureAwait(true),
                 baseIcon: AppIcon.Bytes,
                 maxSessions: limit.Limit,
                 canWriteAssets: true,
@@ -559,7 +561,7 @@ public sealed class ProfilesPageViewModel : ViewModelBase
     internal void ReportError(Exception e) => _toasts.Error(e.Message);
 
     /// <summary>Translate a stored profile into the flags the browser is launched with.</summary>
-    private LaunchRequest BuildRequest(Profile profile)
+    private async Task<LaunchRequest> BuildRequestAsync(Profile profile, CancellationToken ct = default)
     {
         var args = FingerprintArgs.Build(profile);
         args.AddRange(PrivacyArgs.Build(profile));
@@ -573,15 +575,42 @@ public sealed class ProfilesPageViewModel : ViewModelBase
         args.AddRange(profile.Startup.ExtraArgs);
 
         var settings = _settings.Current;
+        var proxy = ResolveProxy(profile);
+        var followsIp = profile.Locale.Mode == LocaleMode.Ip;
+
+        // ------------------------------------------------------------------
+        // "Follow proxy IP" has to actually resolve something.
+        //
+        // Previously this mode only set GeoIp on the request, and nothing ever
+        // read that flag: no locale and no timezone reached the browser, so
+        // Chromium used the host's own. A user on a Vienna VPN therefore got an
+        // Austrian exit IP alongside their machine's language and timezone --
+        // precisely the mismatch this setting exists to remove, and one that is
+        // trivial to detect from a page.
+        //
+        // The lookup is deliberately NOT gated on having a proxy. The egress IP
+        // of a system-wide VPN is exactly the address the site will see, and it
+        // is exactly the case that was broken.
+        // ------------------------------------------------------------------
+        var locale = profile.Locale.Mode == LocaleMode.Manual ? profile.Locale.Locale : null;
+        var timezone = profile.Locale.Mode == LocaleMode.Manual ? profile.Locale.Timezone : null;
+
+        if (followsIp)
+        {
+            var geo = await ResolveGeoAsync(profile, proxy, ct).ConfigureAwait(true);
+            var resolved = GeoLocale.Resolve(locale, timezone, geo?.CountryCode, geo?.Timezone);
+            locale = resolved.Locale;
+            timezone = resolved.Timezone;
+        }
 
         return new LaunchRequest
         {
             Args = args,
             Headless = profile.Startup.Headless,
-            Locale = profile.Locale.Locale,
-            Timezone = profile.Locale.Timezone,
-            Proxy = ResolveProxy(profile),
-            GeoIp = profile.Locale.Mode == LocaleMode.Ip,
+            Locale = locale,
+            Timezone = timezone,
+            Proxy = proxy,
+            GeoIp = followsIp,
             Humanize = profile.Behaviour.Humanize,
             ExtensionPaths = [.. profile.Startup.ExtensionPaths],
             LicenseKey = ReadLicenseKey(),
@@ -591,6 +620,68 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             ReleaseChannel = settings.ReleaseChannel == ReleaseChannel.Preview ? "preview" : "stable",
         };
     }
+
+    /// <summary>
+    /// Exit-IP geo for a launch, cached per endpoint.
+    /// <para>
+    /// Cached because this sits directly in front of starting a browser. An exit
+    /// IP does not move often enough to justify paying a network round-trip on
+    /// every launch, and a rotating proxy is re-checked by the proxy page anyway.
+    /// The key is the endpoint, so two profiles on the same provider share one
+    /// lookup while a profile on a different proxy never reuses another's country.
+    /// </para>
+    /// <para>
+    /// A failed lookup returns null and the launch proceeds. Refusing to start a
+    /// browser because a free geo API rate-limited us would be a far worse
+    /// outcome than launching without a locale override -- which is exactly the
+    /// behaviour this whole feature is replacing.
+    /// </para>
+    /// </summary>
+    private async Task<ProxyCheckResult?> ResolveGeoAsync(
+        Profile profile, ProxyConfig? proxy, CancellationToken ct)
+    {
+        // A configured proxy's own last check already holds the answer, and the
+        // user just ran it. Reusing it keeps the common case free.
+        if (proxy is not null && !string.IsNullOrWhiteSpace(profile.Proxy.SavedProxyId))
+        {
+            var saved = _proxies.Get(profile.Proxy.SavedProxyId!);
+            if (saved?.LastCheck is { Ok: true, CountryCode.Length: > 0 } fresh)
+                return fresh;
+        }
+
+        var key = proxy is null
+            ? "direct"
+            : $"{proxy.Kind}://{proxy.Host}:{proxy.Port}";
+
+        if (_geoCache.TryGetValue(key, out var cached)) return cached;
+
+
+        try
+        {
+            // No proxy still means a real lookup: the machine's egress IP is what
+            // a system VPN rewrites, and that is the address sites will see.
+            var result = await new ProxyChecker()
+                .CheckAsync(proxy ?? new ProxyConfig(), ct)
+                .ConfigureAwait(true);
+
+            if (!result.Ok) return null;
+
+            _geoCache[key] = result;
+            return result;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Never fatal -- see the summary above.
+            return null;
+        }
+    }
+
+    /// <summary>Exit-IP lookups for this app run, keyed by proxy endpoint.</summary>
+    private readonly Dictionary<string, ProxyCheckResult> _geoCache = [];
 
     /// <summary>
     /// The proxy this profile should launch behind.

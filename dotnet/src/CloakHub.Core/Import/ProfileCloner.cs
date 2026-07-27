@@ -72,7 +72,39 @@ public static class ProfileCloner
         ["SingletonLock", "SingletonCookie", "SingletonSocket", "LOCK", "lock", ".parentlock"];
 
     /// <summary>
+    /// The profile directory Chromium reads inside a user-data directory.
+    /// <para>
+    /// Chromium splits the two concepts: <c>--user-data-dir</c> is the container,
+    /// and the actual profile lives in a subdirectory beneath it — <c>Default</c>
+    /// unless <c>--profile-directory</c> says otherwise. Session state belongs in
+    /// that subdirectory, not the container.
+    /// </para>
+    /// </summary>
+    public const string ChromiumProfileDir = "Default";
+
+    /// <summary>
+    /// Where session data must be written, given a Hub user-data directory.
+    /// <para>
+    /// Exists so the importer and the launcher cannot disagree about the layout.
+    /// They previously did, and it silently broke every import: the clone wrote
+    /// <c>Cookies</c>, <c>Login Data</c> and the rest into the user-data root,
+    /// while the browser — launched with <c>--user-data-dir</c> and no
+    /// <c>--profile-directory</c> — looked for them one level down in
+    /// <c>Default/</c>. It found an empty profile and created a fresh one, so the
+    /// import reported success, reported the megabytes it had copied, and the
+    /// user got a logged-out browser with no indication anything had gone wrong.
+    /// </para>
+    /// </summary>
+    public static string TargetFor(string userDataDir) =>
+        Path.Combine(userDataDir, ChromiumProfileDir);
+
+    /// <summary>
     /// Clone <paramref name="sourceDir"/> into <paramref name="targetDir"/>.
+    /// <para>
+    /// <paramref name="targetDir"/> is the <i>profile</i> directory, not the
+    /// user-data directory — callers holding the latter must go through
+    /// <see cref="TargetFor"/>.
+    /// </para>
     /// <para>
     /// The source browser must be closed. Chromium holds an exclusive lock on the
     /// cookie DB while running, and copying it live yields a truncated file — which
