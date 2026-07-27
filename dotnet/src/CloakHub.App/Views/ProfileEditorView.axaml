@@ -554,7 +554,34 @@
               <StackPanel Spacing="14">
                 <TextBlock Text="Proxy" FontWeight="SemiBold" />
 
-                <StackPanel Spacing="5">
+                <!--
+                  The library picker comes first, and is hidden entirely when the
+                  library is empty. Offering a choice with one option would just be a
+                  control the user has to read and dismiss before reaching the fields
+                  they actually need on a fresh install.
+                -->
+                <StackPanel Spacing="5" IsVisible="{Binding ShowLibraryPicker}">
+                  <TextBlock Classes="th" Text="SOURCE" />
+                  <ComboBox ItemsSource="{Binding SavedProxyChoices}"
+                            SelectedItem="{Binding SavedProxy, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SavedProxyChoice">
+                        <StackPanel Spacing="1">
+                          <TextBlock Text="{Binding Name}" />
+                          <TextBlock Classes="faint mono" FontSize="11" Text="{Binding Detail}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <Border Classes="callout" IsVisible="{Binding IsLibraryProxy}">
+                  <TextBlock Text="{Binding LibraryProxyNote}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}" />
+                </Border>
+
+                <StackPanel Spacing="5" IsVisible="{Binding IsInlineProxy}">
                   <TextBlock Classes="th" Text="TYPE" />
                   <ComboBox ItemsSource="{Binding ProxyKinds}"
                             SelectedItem="{Binding ProxyKind, Mode=TwoWay}"
@@ -568,34 +595,43 @@
                 </StackPanel>
 
                 <StackPanel Spacing="14" IsVisible="{Binding HasProxy}">
-                  <Grid ColumnDefinitions="2*,*">
-                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
-                      <TextBlock Classes="th" Text="HOST" />
-                      <TextBox Text="{Binding ProxyHost, Mode=TwoWay}" Watermark="203.0.113.9" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
-                      <TextBlock Classes="th" Text="PORT" />
-                      <NumericUpDown Value="{Binding ProxyPort, Mode=TwoWay}"
-                                     Minimum="1" Maximum="65535" Increment="1" FormatString="0" />
-                    </StackPanel>
-                  </Grid>
+                  <!--
+                    The endpoint fields disappear when a library entry is attached
+                    rather than being shown greyed out. A disabled copy of the host
+                    invites the user to try editing it, and the honest answer — "edit
+                    it in the library, it is shared" — is what the callout above
+                    already says.
+                  -->
+                  <StackPanel Spacing="14" IsVisible="{Binding IsInlineProxy}">
+                    <Grid ColumnDefinitions="2*,*">
+                      <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                        <TextBlock Classes="th" Text="HOST" />
+                        <TextBox Text="{Binding ProxyHost, Mode=TwoWay}" Watermark="203.0.113.9" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                        <TextBlock Classes="th" Text="PORT" />
+                        <NumericUpDown Value="{Binding ProxyPort, Mode=TwoWay}"
+                                       Minimum="1" Maximum="65535" Increment="1" FormatString="0" />
+                      </StackPanel>
+                    </Grid>
 
-                  <Grid ColumnDefinitions="*,*">
-                    <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
-                      <TextBlock Classes="th" Text="USERNAME" />
-                      <TextBox Text="{Binding ProxyUsername, Mode=TwoWay}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
-                      <TextBlock Classes="th" Text="PASSWORD" />
-                      <TextBox Text="{Binding ProxyPassword, Mode=TwoWay}"
-                               PasswordChar="•" />
-                    </StackPanel>
-                  </Grid>
+                    <Grid ColumnDefinitions="*,*">
+                      <StackPanel Grid.Column="0" Spacing="5" Margin="0,0,10,0">
+                        <TextBlock Classes="th" Text="USERNAME" />
+                        <TextBox Text="{Binding ProxyUsername, Mode=TwoWay}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="5" Margin="10,0,0,0">
+                        <TextBlock Classes="th" Text="PASSWORD" />
+                        <TextBox Text="{Binding ProxyPassword, Mode=TwoWay}"
+                                 PasswordChar="•" />
+                      </StackPanel>
+                    </Grid>
 
-                  <Border Classes="callout warn">
-                    <TextBlock Text="{Binding ProxySecretNote}" TextWrapping="Wrap"
-                               FontSize="{DynamicResource FontSizeSmall}" />
-                  </Border>
+                    <Border Classes="callout warn">
+                      <TextBlock Text="{Binding ProxySecretNote}" TextWrapping="Wrap"
+                                 FontSize="{DynamicResource FontSizeSmall}" />
+                    </Border>
+                  </StackPanel>
 
                   <StackPanel Spacing="5">
                     <TextBlock Classes="th" Text="BYPASS LIST" />
@@ -612,7 +648,7 @@
                              Watermark="https://provider.example/rotate?key=…" />
                     <TextBlock Classes="faint" TextWrapping="Wrap"
                                FontSize="{DynamicResource FontSizeTiny}"
-                               Text="Recorded for later use. The Hub does not call it yet." />
+                               Text="Called by the Rotate button on the Proxies page to request a new exit IP." />
                   </StackPanel>
                 </StackPanel>
               </StackPanel>

@@ -155,7 +155,8 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             fresh,
             _store.Folders(),
             save: SaveFromEditor,
-            cancel: CloseEditor);
+            cancel: CloseEditor,
+            savedProxies: _proxies.List());
     }
 
     private void SaveFromEditor(Profile profile)
@@ -392,7 +393,8 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             created,
             _store.Folders(),
             save: SaveFromEditor,
-            cancel: CloseEditor);
+            cancel: CloseEditor,
+            savedProxies: _proxies.List());
 
         return Task.CompletedTask;
     }

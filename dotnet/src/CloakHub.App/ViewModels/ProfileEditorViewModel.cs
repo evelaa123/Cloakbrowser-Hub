@@ -40,11 +40,27 @@ public sealed class ProfileEditorViewModel : ViewModelBase
         Profile profile,
         IReadOnlyList<ProfileFolder> folders,
         Action<Profile> save,
-        Action cancel)
+        Action cancel,
+        IReadOnlyList<SavedProxy>? savedProxies = null)
     {
         _draft = profile;
         _save = save;
         _cancel = cancel;
+
+        SavedProxyChoices =
+        [
+            SavedProxyChoice.Inline,
+            .. (savedProxies ?? []).Select(p => new SavedProxyChoice(p)),
+        ];
+
+        // If the profile points at an entry that has since been deleted, fall back to
+        // inline rather than showing an empty combo box. The copied host and port are
+        // still in the draft, so the profile keeps working and the user can see what
+        // it was pointing at instead of an unexplained blank.
+        _savedProxy = SavedProxyChoices.FirstOrDefault(c => c.Id == profile.Proxy.SavedProxyId)
+                      ?? SavedProxyChoice.Inline;
+        if (_savedProxy.Proxy is null && profile.Proxy.SavedProxyId is not null)
+            _draft = _draft with { Proxy = _draft.Proxy with { SavedProxyId = null } };
 
         // A synthetic "no folder" entry, so the combo box can express the root. A
         // null SelectedItem would also work but renders as an empty row, which reads
@@ -625,6 +641,94 @@ public sealed class ProfileEditorViewModel : ViewModelBase
 
     public IReadOnlyList<ProxyKind> ProxyKinds { get; } = Enum.GetValues<ProxyKind>();
 
+    /// <summary>
+    /// The saved proxies offered by the picker, with a synthetic "typed in here"
+    /// entry at the top.
+    /// <para>
+    /// Two ways to attach a proxy exist because they answer different needs. A
+    /// library entry is shared: rotating a provider password is one edit rather than
+    /// one per profile, and that is what anyone running more than a handful of
+    /// profiles actually wants. But a one-off proxy that will never be reused should
+    /// not have to be filed in the library first, so the inline fields stay.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<SavedProxyChoice> SavedProxyChoices { get; private set; } =
+        [SavedProxyChoice.Inline];
+
+    private SavedProxyChoice _savedProxy = SavedProxyChoice.Inline;
+
+    /// <summary>
+    /// The selected library entry, or the synthetic inline entry.
+    /// <para>
+    /// Selecting a library entry copies its host, port and credentials into the
+    /// draft as well as recording the id. That looks redundant, but it is what keeps
+    /// the profile openable if the entry is later deleted: the launcher prefers the
+    /// library, and falls back to the copy rather than starting the profile
+    /// unproxied — which for an anti-detect profile is the one failure mode that
+    /// actually costs something, since it leaks the real IP to a site that has
+    /// already seen the identity behind a different one.
+    /// </para>
+    /// </summary>
+    public SavedProxyChoice SavedProxy
+    {
+        get => _savedProxy;
+        set
+        {
+            var choice = value ?? SavedProxyChoice.Inline;
+            if (ReferenceEquals(_savedProxy, choice)) return;
+            _savedProxy = choice;
+
+            if (choice.Proxy is { } saved)
+            {
+                // Bypass and rotation stay per-profile if the profile already set
+                // them: a shared entry describes the endpoint, not what one identity
+                // should route around it.
+                Mutate(d => d with
+                {
+                    Proxy = d.Proxy with
+                    {
+                        SavedProxyId = saved.Id,
+                        Kind = saved.Kind,
+                        Host = saved.Host,
+                        Port = saved.Port,
+                        Username = saved.Username,
+                        Password = saved.Password,
+                        Bypass = d.Proxy.Bypass ?? saved.Bypass,
+                        RotationUrl = d.Proxy.RotationUrl ?? saved.RotationUrl,
+                    },
+                });
+            }
+            else
+            {
+                // Detaching leaves the copied values in place rather than clearing
+                // them. The user picked that endpoint deliberately; dropping it the
+                // moment they switch to manual editing would delete work.
+                Mutate(d => d with { Proxy = d.Proxy with { SavedProxyId = null } });
+            }
+
+            OnPropertyChanged(nameof(SavedProxy));
+            OnPropertyChanged(nameof(IsLibraryProxy));
+            OnPropertyChanged(nameof(IsInlineProxy));
+            OnPropertyChanged(nameof(HasProxy));
+            OnPropertyChanged(nameof(WebRtcNote));
+            OnPropertyChanged(nameof(HasWebRtcNote));
+        }
+    }
+
+    /// <summary>True when the draft is attached to a library entry.</summary>
+    public bool IsLibraryProxy => _draft.Proxy.SavedProxyId is not null;
+
+    /// <summary>True when the endpoint fields should be editable.</summary>
+    public bool IsInlineProxy => !IsLibraryProxy;
+
+    /// <summary>Explains what a library attachment means, shown in place of the fields.</summary>
+    public string LibraryProxyNote => _savedProxy.Proxy is null
+        ? ""
+        : $"Using \"{_savedProxy.Name}\" from the proxy library. Editing it there updates every "
+          + "profile that shares it. Switch to \"Enter details here\" to give this profile its own copy.";
+
+    public bool ShowLibraryPicker => SavedProxyChoices.Count > 1;
+
     public ProxyKind ProxyKind
     {
         get => _draft.Proxy.Kind;
@@ -1066,6 +1170,42 @@ public sealed class EditorTabItem : ViewModelBase
 public sealed record FolderChoice(string? Id, string Name)
 {
     public static readonly FolderChoice Root = new(null, "No folder");
+}
+
+/// <summary>
+/// One entry in the saved-proxy picker.
+/// <para>
+/// A reference type with a singleton for the inline case, so the combo box can
+/// select by reference and the "not from the library" option is a real selectable
+/// item rather than a null. A null selection renders as a blank row, which reads
+/// as a value that failed to load instead of a deliberate choice.
+/// </para>
+/// </summary>
+public sealed class SavedProxyChoice
+{
+    /// <summary>The synthetic "type the details in here" entry.</summary>
+    public static readonly SavedProxyChoice Inline = new();
+
+    private SavedProxyChoice() { }
+
+    public SavedProxyChoice(SavedProxy proxy)
+    {
+        Proxy = proxy;
+        // Falls back to the masked endpoint when the entry was imported without a
+        // name, so the row is never blank.
+        Name = string.IsNullOrWhiteSpace(proxy.Name) ? ProxyParser.Describe(proxy) : proxy.Name;
+    }
+
+    public SavedProxy? Proxy { get; }
+
+    public string? Id => Proxy?.Id;
+
+    public string Name { get; } = "Enter details here";
+
+    /// <summary>What the combo box shows: the name, plus the masked endpoint beneath it.</summary>
+    public string Detail => Proxy is null
+        ? "This profile keeps its own copy"
+        : ProxyParser.Describe(Proxy);
 }
 
 public sealed record ScreenPreset(int Width, int Height)

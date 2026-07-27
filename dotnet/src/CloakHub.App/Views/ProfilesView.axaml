@@ -161,16 +161,24 @@
         </StackPanel>
       </Border>
 
-      <!-- The table -->
-      <Grid RowDefinitions="Auto,*" Margin="22,16,22,22">
-        <Grid.IsVisible>
+      <!--
+        The table scrolls horizontally below a floor width. The columns are mostly
+        proportional, but the four fixed ones total ~460px, so at a larger interface
+        scale the star columns are squeezed to a few characters and the row becomes
+        unreadable. A floor plus a scrollbar degrades gracefully instead.
+      -->
+      <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Disabled">
+        <ScrollViewer.IsVisible>
           <!--
             Hidden when either empty state is showing. Expressed as a binding on the
             row count rather than as "not IsEmpty and not HasNoMatches", which would
             need two converters to say the same thing.
           -->
           <Binding Path="Rows.Count" Converter="{x:Static vm:Converters.GreaterThanZero}" />
-        </Grid.IsVisible>
+        </ScrollViewer.IsVisible>
+
+      <Grid RowDefinitions="Auto,*" Margin="22,16,22,22" MinWidth="820">
 
         <!--
           The header and the rows must use identical column definitions, and the
@@ -310,6 +318,7 @@
           </ListBox.ItemTemplate>
         </ListBox>
       </Grid>
+      </ScrollViewer>
 
     </Panel>
     </Grid>
