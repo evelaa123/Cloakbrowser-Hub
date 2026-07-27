@@ -84,8 +84,11 @@ public static class ChromiumBinary
                 $"No browser found. Expected a CloakBrowser cache at {cache}.");
         }
 
-        // Pro builds are a separate directory and take precedence, matching the
-        // wrapper: a user with a licensed build expects to be running it.
+        // Tier outranks version, matching the wrapper. The two tiers are different
+        // browser builds, not two points on one timeline: dropping from Pro to Free
+        // to gain a version would swap out the patch set a user's profiles were
+        // fingerprinted under, which is a bigger change than running a build a few
+        // weeks old. Within a tier the newest always wins.
         var candidates = Directory.EnumerateDirectories(cache, "chromium-*")
             .Select(dir => new
             {
@@ -96,7 +99,7 @@ public static class ChromiumBinary
             })
             .Where(c => File.Exists(c.Exe))
             .OrderByDescending(c => c.Pro)
-            .ThenByDescending(c => c.Version)
+            .ThenByDescending(c => c.Version, VersionOrder.Instance)
             .ToList();
 
         if (candidates.Count == 0)
@@ -109,13 +112,30 @@ public static class ChromiumBinary
     }
 
     /// <summary>
-    /// Version from a <c>chromium-140.0.7339.207</c> directory name.
+    /// Ordering key from a build directory name such as
+    /// <c>chromium-148.0.7778.215.2-pro</c>.
     /// <para>
-    /// Compared as a version rather than a string so 140 sorts above 99 — a plain
-    /// string comparison would pick the older build once the major hit three digits.
+    /// Parsed by hand rather than through <see cref="Version"/>, which accepts at
+    /// most four components. CloakBrowser publishes a fifth — the patch revision of
+    /// the stealth build itself — so <c>Version.TryParse</c> returned false for
+    /// every real directory name and the old code fell back to <c>0.0</c> for all
+    /// of them. With every candidate scoring identically the sort became a no-op
+    /// and the resolver launched whatever the filesystem happened to enumerate
+    /// first, which is how a machine holding both 148 and 150 kept starting 148.
+    /// </para>
+    /// <para>
+    /// The failure was invisible from the UI: the update banner compares the
+    /// version strings for inequality, so it correctly announced 150 while the
+    /// launcher went on using 148 — the app appeared to know about an update it
+    /// was silently refusing to use.
+    /// </para>
+    /// <para>
+    /// Unparsable or missing components sort below anything numeric rather than
+    /// throwing. A directory that does not follow the scheme is far more likely to
+    /// be a leftover or a hand-made copy than the build the user wants launched.
     /// </para>
     /// </summary>
-    internal static Version ParseVersion(string directoryName)
+    internal static IReadOnlyList<int> ParseVersion(string directoryName)
     {
         var name = directoryName;
 
@@ -124,7 +144,60 @@ public static class ChromiumBinary
         if (name.EndsWith("-pro", StringComparison.Ordinal))
             name = name[..^"-pro".Length];
 
-        return Version.TryParse(name, out var v) ? v : new Version(0, 0);
+        name = name.Trim();
+        if (name.Length == 0) return [];
+
+        var parts = name.Split('.');
+        var numbers = new List<int>(parts.Length);
+
+        foreach (var part in parts)
+        {
+            // Stop at the first component that is not a plain number: a suffix
+            // like "-rc1" or a stray word must not silently contribute a 0 that
+            // would reorder otherwise-equal builds.
+            if (!int.TryParse(part.Trim(), System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var n))
+                break;
+
+            numbers.Add(n);
+        }
+
+        return numbers;
+    }
+
+    /// <summary>
+    /// Compare two build versions component by component.
+    /// <para>
+    /// A shorter version that matches on every shared component sorts lower, so
+    /// <c>148.0.7778.215</c> is older than <c>148.0.7778.215.2</c> — the fifth
+    /// component is the stealth patch level, and a build carrying one is a
+    /// revision of the build without it.
+    /// </para>
+    /// </summary>
+    internal static int CompareVersions(IReadOnlyList<int> a, IReadOnlyList<int> b)
+    {
+        var length = Math.Max(a.Count, b.Count);
+
+        for (var i = 0; i < length; i++)
+        {
+            // Missing components count as 0 rather than as "unknown": that keeps
+            // the comparison a total order, which OrderBy requires to be stable.
+            var left = i < a.Count ? a[i] : 0;
+            var right = i < b.Count ? b[i] : 0;
+
+            if (left != right) return left.CompareTo(right);
+        }
+
+        return 0;
+    }
+
+    /// <summary>Orders build directories newest-first, for use as a comparer.</summary>
+    internal sealed class VersionOrder : IComparer<IReadOnlyList<int>>
+    {
+        public static readonly VersionOrder Instance = new();
+
+        public int Compare(IReadOnlyList<int>? x, IReadOnlyList<int>? y) =>
+            CompareVersions(x ?? [], y ?? []);
     }
 
     private static string? Read(string name, IDictionary<string, string>? env) =>
