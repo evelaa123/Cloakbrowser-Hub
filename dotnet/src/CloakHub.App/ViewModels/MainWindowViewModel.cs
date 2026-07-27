@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using CloakHub.App.Services;
+using CloakHub.Core.Automation;
 using CloakHub.Core.Binaries;
 using CloakHub.Core.Launch;
 using CloakHub.Core.Licensing;
@@ -32,6 +34,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly LicenseService _license;
     private readonly BinaryInstaller _binaries;
 
+    /// <summary>
+    /// The loopback automation API.
+    /// <para>
+    /// Owned by the shell because it outlives every page: a script must be able to
+    /// drive profiles while the user is looking at Settings, and its lifetime is tied
+    /// to the app rather than to a screen.
+    /// </para>
+    /// </summary>
+    private readonly AutomationServer _automation;
+
     public MainWindowViewModel(
         ProfileStore profiles,
         ProxyStore proxies,
@@ -54,7 +66,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         ProfilesPage = new ProfilesPageViewModel(profiles, proxies, settings, paths, Toasts, sessions);
         ProxiesPage = new ProxiesPageViewModel(proxies, profiles, Toasts);
-        SettingsPage = new SettingsPageViewModel(settings, paths, Toasts, OnThemeChanged, OnZoomChanged);
+        SettingsPage = new SettingsPageViewModel(
+            settings, paths, Toasts, OnThemeChanged, OnZoomChanged, SyncAutomation);
         ImportPage = new ImportPageViewModel(profiles, settings, paths, Toasts, () => Navigate(Route.Profiles));
         LicensePage = new LicensePageViewModel(
             _license, _binaries, settings, Toasts,
@@ -65,6 +78,16 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         // otherwise the app opens at 100% and only jumps to the user's size when they
         // next visit the settings page.
         _uiZoom = settings.Current.UiZoom;
+
+        _automation = new AutomationServer(new AutomationHost(
+            profiles,
+            sessions,
+            settings,
+            // Delegated to the page rather than reimplemented, so a scripted launch
+            // and a clicked one build exactly the same flags.
+            start: (profile, ct) => ProfilesPage.LaunchAsync(profile, ct),
+            dataDirFor: id => paths.ProfileDataDir(settings.Current, id),
+            log: Toasts.Info));
 
         NavigateCommand = new RelayCommand<Route>(Navigate);
 
@@ -91,6 +114,11 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         foreach (var note in profiles.MigrationNotes) Toasts.Info(note);
 
         Navigate(Route.Profiles);
+
+        // Started only when the setting says so. A local port that can launch browsers
+        // and hand out CDP URLs is reachable by anything else on the machine, so it
+        // stays off until asked for rather than opening by default.
+        SyncAutomation();
     }
 
     public ToastHost Toasts { get; }
@@ -219,6 +247,43 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void OnZoomChanged(double zoom) => UiZoom = zoom;
 
+    // ------------------------------------------------------------------
+    // Automation API
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Bring the listener in line with the saved settings.
+    /// <para>
+    /// Always stops first, even when only the token changed. The listener captures its
+    /// port and token at bind time, so restarting is the only way to make a saved
+    /// setting actually take effect — and the alternative, mutating them in place,
+    /// would leave a request that arrived mid-change checked against neither value.
+    /// </para>
+    /// </summary>
+    private void SyncAutomation() => _ = SyncAutomationAsync();
+
+    private async Task SyncAutomationAsync()
+    {
+        var wanted = _settings.Current.Automation;
+
+        try
+        {
+            await _automation.StopAsync().ConfigureAwait(true);
+
+            if (!wanted.Enabled) return;
+
+            await _automation.StartAsync(wanted).ConfigureAwait(true);
+            Toasts.Success($"Automation API listening on http://127.0.0.1:{wanted.Port}");
+        }
+        catch (Exception e)
+        {
+            // Reported rather than thrown: a port already in use is an ordinary
+            // conflict the user can fix in Settings, and it must not take the window
+            // down or leave the toggle looking as though it worked.
+            Toasts.Error($"Automation API could not start: {e.Message}");
+        }
+    }
+
     /// <summary>
     /// Called as the app closes.
     /// <para>
@@ -234,6 +299,18 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         // temp directory. Released here rather than left to the OS, because Windows
         // does not clear %TEMP% on reboot and a browser profile is hundreds of MB.
         ImportPage.OnShutdown();
+
+        // Stopped before the process exits so the port is released; an abandoned
+        // HttpListener can keep it bound long enough that the next launch reports a
+        // conflict with itself.
+        try
+        {
+            _automation.StopAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Already exiting; a teardown failure has nowhere useful to be reported.
+        }
     }
 
     public void Dispose()
@@ -241,6 +318,8 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         LicensePage.Dispose();
         _binaries.Dispose();
         _license.Dispose();
+
+        _automation.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }
 

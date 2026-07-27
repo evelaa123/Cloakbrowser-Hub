@@ -475,17 +475,37 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             return;
         }
 
+        row.MarkBusy("Starting…");
+        try
+        {
+            var error = await LaunchAsync(profile).ConfigureAwait(true);
+            if (error is not null) _toasts.Error(error);
+        }
+        finally
+        {
+            row.ClearBusy();
+        }
+    }
+
+    /// <summary>
+    /// Start a session and report the failure as a string rather than a toast.
+    /// <para>
+    /// Shared with the automation API, which has a caller waiting on an HTTP response
+    /// and no user to show a toast to. Keeping one implementation is what stops a
+    /// scripted launch from being fingerprinted differently to a clicked one — a
+    /// second copy of the flag assembly would drift, and the drift would be close to
+    /// invisible until a site noticed it.
+    /// </para>
+    /// </summary>
+    internal async Task<string?> LaunchAsync(Profile profile, CancellationToken ct = default)
+    {
         var limit = SessionLimit.Resolve(_settings.Current.MaxConcurrentSessions, planSeats: null);
 
-        // Shown before the row changes state, so a refused launch never leaves a
+        // Checked before anything changes state, so a refused launch never leaves a
         // half-started row behind.
         if (_running.Count >= limit.Limit)
-        {
-            _toasts.Warning($"Session limit reached ({limit.Limit}) — limited by {limit.Reason}.");
-            return;
-        }
+            return $"Session limit reached ({limit.Limit}) — limited by {limit.Reason}.";
 
-        row.MarkBusy("Starting…");
         try
         {
             var result = await _sessions.StartAsync(
@@ -494,7 +514,8 @@ public sealed class ProfilesPageViewModel : ViewModelBase
                 baseIcon: AppIcon.Bytes,
                 maxSessions: limit.Limit,
                 canWriteAssets: true,
-                windowsStub: HostOs.FindLauncherStub()).ConfigureAwait(true);
+                windowsStub: HostOs.FindLauncherStub(),
+                ct: ct).ConfigureAwait(true);
 
             switch (result)
             {
@@ -502,12 +523,15 @@ public sealed class ProfilesPageViewModel : ViewModelBase
                     _store.MarkLaunched(profile.Id);
                     SyncRunning();
                     _toasts.Success($"\"{profile.Name}\" is running as instance #{started.Session.Ordinal}.");
-                    break;
+                    return null;
 
                 case SessionResult.Failed failed:
                     SyncRunning();
-                    _toasts.Error(failed.Error);
-                    break;
+                    return failed.Error;
+
+                default:
+                    SyncRunning();
+                    return null;
             }
         }
         catch (BrowserNotFoundException e)
@@ -515,16 +539,12 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             // A first run with no browser downloaded yet is an ordinary state, not a
             // fault, so it gets the instruction rather than a stack trace.
             SyncRunning();
-            _toasts.Error(e.Message);
+            return e.Message;
         }
         catch (Exception e)
         {
             SyncRunning();
-            _toasts.Error($"Could not start \"{profile.Name}\": {e.Message}");
-        }
-        finally
-        {
-            row.ClearBusy();
+            return $"Could not start \"{profile.Name}\": {e.Message}";
         }
     }
 

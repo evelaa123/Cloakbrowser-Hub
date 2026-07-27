@@ -30,6 +30,16 @@ public sealed class SettingsPageViewModel : ViewModelBase
     private readonly Action<double> _onZoomChanged;
 
     /// <summary>
+    /// Called when the automation port, token or enabled flag changes.
+    /// <para>
+    /// The listener is bound with the values it started with, so a saved setting is
+    /// not a live one. Without this the UI would show the new port while scripts kept
+    /// reaching the old one — a discrepancy with no visible cause.
+    /// </para>
+    /// </summary>
+    private readonly Action _onAutomationChanged;
+
+    /// <summary>
     /// Suppresses write-through while the view model is populating its own fields.
     /// <para>
     /// Without it, assigning the loaded values in the constructor would each trigger
@@ -45,13 +55,15 @@ public sealed class SettingsPageViewModel : ViewModelBase
         HubPaths paths,
         ToastHost toasts,
         Action<AppTheme> onThemeChanged,
-        Action<double> onZoomChanged)
+        Action<double> onZoomChanged,
+        Action onAutomationChanged)
     {
         _settings = settings;
         _paths = paths;
         _toasts = toasts;
         _onThemeChanged = onThemeChanged;
         _onZoomChanged = onZoomChanged;
+        _onAutomationChanged = onAutomationChanged;
 
         OpenProfilesFolderCommand = new RelayCommand(() => Reveal(EffectiveProfilesDir));
         OpenDataFolderCommand = new RelayCommand(() => Reveal(_paths.Root));
@@ -370,6 +382,8 @@ public sealed class SettingsPageViewModel : ViewModelBase
             // generate one, and the field must show the real value or the user will
             // copy an empty string into their script.
             AutomationToken = _settings.Current.Automation.Token;
+
+            _onAutomationChanged();
         }
     }
 
@@ -382,6 +396,11 @@ public sealed class SettingsPageViewModel : ViewModelBase
             var clamped = value is >= 1024 and <= 65535 ? value : 7317;
             if (!SetField(ref _automationPort, clamped) || _loading) return;
             Save(s => s with { Automation = s.Automation with { Port = clamped } });
+
+            // The listener is bound to the old port until it is restarted, so without
+            // this the setting would appear to apply and scripts would keep reaching
+            // the previous one.
+            _onAutomationChanged();
         }
     }
 
@@ -399,6 +418,9 @@ public sealed class SettingsPageViewModel : ViewModelBase
         var token = AutomationSettings.NewToken();
         Save(s => s with { Automation = s.Automation with { Token = token } });
         AutomationToken = _settings.Current.Automation.Token;
+
+        // The running server holds the old token in memory, so it has to be told.
+        _onAutomationChanged();
 
         // Warned rather than merely confirmed: the old token stops working the moment
         // this is written, so any script already holding it starts failing with a 401
