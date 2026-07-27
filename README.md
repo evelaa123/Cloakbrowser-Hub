@@ -4,50 +4,65 @@
 
 # CloakBrowser Hub
 
-**An anti-detect browser manager — profiles, fingerprints, folders and proxies.**
+**Менеджер анти-детект браузера — профили, отпечатки, папки, прокси и автоматизация.**
 
-Built on [CloakBrowser](https://www.npmjs.com/package/cloakbrowser). .NET 8 + Avalonia.
-Runs on Windows, Linux and macOS from a single codebase.
+Построен на [CloakBrowser](https://www.npmjs.com/package/cloakbrowser). .NET 8 + Avalonia.
+Windows, Linux и macOS из одной кодовой базы.
 
-[Download](#download) · [Build from source](#build-from-source) · [What works today](#what-works-today) · [How it works](#how-it-works)
+[Возможности](#возможности) · [Установка](#установка) · [Сборка](#сборка-из-исходников) · [Автоматизация](#автоматизация) · [Устройство](#устройство)
 
 </div>
 
 ---
 
-## What this is
+## Что это
 
-Every browser profile here is a separate identity: its own fingerprint, its own
-cookie jar, its own proxy, its own disk directory. Nothing is shared between them,
-which is the entire point — two profiles that leak a common trait are two profiles a
-site can link back to one person.
+Каждый профиль здесь — отдельная личность: свой отпечаток, своя банка cookies, свой
+прокси, свой каталог на диске. Между профилями не разделяется ничего, и в этом весь
+смысл: два профиля с общей характеристикой — это два профиля, которые сайт свяжет с
+одним человеком.
 
-The Hub is the manager around that idea. It stores the profiles, generates
-fingerprints that are internally coherent, groups them into folders, and launches
-sessions.
+Hub — это менеджер вокруг этой идеи. Он хранит профили, генерирует внутренне
+непротиворечивые отпечатки, группирует их по папкам, запускает сессии и отдаёт
+скриптам REST API для управления всем этим без единого клика.
 
-> **Status: the desktop app is a work in progress.**
-> Profile management is complete and usable. Session launching is not yet wired to a
-> real browser. Read [What works today](#what-works-today) before downloading — it is
-> an honest table, not a feature list.
+**Приложение готово к работе.** Все разделы реализованы, заглушек не осталось.
+Один самодостаточный файл — без .NET runtime, без Node, без установщика.
 
 ---
 
-## Download
+## Возможности
 
-Self-contained builds. No .NET runtime, no Node, no installer — one file.
+| Раздел | Что умеет |
+|---|---|
+| **Профили** | Поиск, сортировка, дублирование, удаление, живые счётчики |
+| **Папки** | Создание, переименование по месту, удаление, перенос профилей |
+| **Редактор профиля** | 8 вкладок: General, Fingerprint, Proxy, Cookies, Locale, Behaviour, Startup, Advanced |
+| **Отпечатки** | Согласованные наборы под каждую ОС, перегенерация в один клик |
+| **Запуск браузера** | Изоляция данных, лимиты сессий по тарифу, выделение CDP-порта |
+| **Прокси** | HTTP/SOCKS с авторизацией, назначение на профиль, проверка с выводом внешнего IP |
+| **Cookies** | Импорт и экспорт прямо из редактора профиля |
+| **Импорт профилей** | Автопоиск Chromium и Firefox, выбор папки, архивы `.zip`, `.tar`, `.tar.gz`, `.tgz` |
+| **Лицензия** | Активация, обновление, тариф и места, маскированный ключ, офлайн-режим |
+| **Загрузка бинарников** | Манифест релизов, проверка подписи Ed25519, привязка версии, контроль хеша |
+| **Automation API** | Локальный REST для скриптов: Puppeteer, Playwright, Selenium |
+| **Хранилище** | Атомарная запись, карантин повреждённых файлов, миграция схемы 1→4 |
 
-| Platform | File | Size |
+---
+
+## Установка
+
+Самодостаточные сборки. Скачать на [странице релизов](../../releases).
+
+| Платформа | Файл | Размер |
 |---|---|---|
-| Windows x64 | `CloakBrowserHub-v1.0.0-win-x64.zip` | ~42 MB |
-| Linux x64 | `CloakBrowserHub-v1.0.0-linux-x64.tar.gz` | ~40 MB |
+| Windows x64 | `CloakBrowserHub-v1.0.0-win-x64.zip` | 40 МБ |
+| Linux x64 | `CloakBrowserHub-v1.0.0-linux-x64.tar.gz` | 37 МБ |
 
-Grab them from the [Releases page](../../releases).
+**Windows** — распаковать, запустить `CloakBrowserHub.exe`. SmartScreen предупредит о
+неизвестном издателе, потому что бинарник не подписан: *Подробнее → Выполнить в любом случае*.
 
-**Windows** — unzip, run `CloakBrowserHub.exe`. SmartScreen will warn about an
-unrecognised publisher because the binary is unsigned; *More info → Run anyway*.
-
-**Linux** — needs a desktop session (X11 or Wayland):
+**Linux** — нужна графическая сессия (X11 или Wayland):
 
 ```bash
 tar -xzf CloakBrowserHub-v1.0.0-linux-x64.tar.gz
@@ -55,106 +70,138 @@ chmod +x CloakBrowserHub
 ./CloakBrowserHub
 ```
 
-**macOS** — not currently published as a binary. The code targets it and the icon
-pipeline emits a proper `.icns`, but an unsigned, unnotarised `.app` is refused by
-Gatekeeper in a way that looks like a corrupt download, so shipping one would waste
-your time. Build it yourself — see below.
+**macOS** — код собирается под macOS, и конвейер иконок выдаёт корректный `.icns`, но
+готовый бинарник пока не публикуется: неподписанный и не прошедший нотаризацию `.app`
+Gatekeeper отклоняет так, что это выглядит как битая загрузка. Соберите сами — см. ниже.
 
 ---
 
-## What works today
+## Как это работает
 
-The desktop app has five sections. Three of them are still placeholders, and they say
-so on screen rather than showing an empty pane.
+### Согласованные отпечатки
 
-| Area | State | Notes |
-|---|---|---|
-| **Profiles list** | ✅ Working | Search, sort, duplicate, delete, live counts |
-| **Folders** | ✅ Working | Create, inline rename, delete, move profiles between them |
-| **Profile editor** | ✅ Working | 7 tabs — General, Fingerprint, Proxy, Locale & Geo, Behaviour, Startup, Advanced |
-| **Fingerprint generation** | ✅ Working | Coherent per-platform draws, one-click re-roll |
-| **Settings** | ✅ Working | Session limit, data directory, release channel, UI zoom, automation port |
-| **Storage & migration** | ✅ Working | Atomic writes, corrupt-file quarantine, schema 1→4 migration |
-| **Launching a browser** | ⚠️ **Not wired** | Everything up to the launch runs — limit check, badge assets, argument building — but no browser starts. `IBrowserLauncher` has no implementation yet. |
-| **Proxy library** | ⚠️ Placeholder | Per-profile proxies work in the editor; the shared library, parser and checker are not ported |
-| **Import** | ⚠️ Placeholder | Chrome/Firefox/anti-detect importers not ported |
-| **License** | ⚠️ Placeholder | Key parsing exists in Core; activation UI not ported |
-| **Cookie import/export** | ❌ Not ported | |
-| **Automation HTTP API** | ❌ Not ported | The port setting exists; the server does not |
+Отпечаток убедителен только тогда, когда его части встречаются вместе в реальном мире.
+Машина, заявляющая macOS с рендерером `ANGLE (NVIDIA, ... D3D11)`, описывает компьютер,
+которого не может существовать, и одно это противоречие опознаёт вас *сильнее*, чем
+честные значения.
 
-If you need the missing pieces today, the previous Electron implementation still has
-them — see [History](#history).
+Поэтому пулы значений разбиты по платформам и никогда не смешиваются:
 
----
+- **Вендор и рендерер GPU хранятся парами** — «Apple Inc.» физически не может выпасть
+  вместе с рендерером Radeon.
+- **Разрешения экрана свои для каждой ОС** — Apple никогда не выпускала панель 1366×768.
+- **Локаль и таймзона предлагаются вместе** — `de-DE` в `Asia/Tokyo` проверяется одной
+  строкой JavaScript.
+- **`deviceMemory` только степени двойки**, потому что спецификация API допускает
+  ровно этот набор значений.
 
-## Features in detail
+Распределения намеренно неравномерны. 1920×1080 встречается в пуле Windows трижды,
+потому что оно действительно самое частое. Равномерная выборка из набора правдоподобных
+значений даёт популяцию, которая сама по себе неправдоподобна: профиль с разрешением
+«одно из девяти» выделяется больше, а не меньше.
 
-### Coherent fingerprints, not random ones
+### Папки
 
-A fingerprint is only convincing when its parts co-occur in the real world. A machine
-claiming macOS with an `ANGLE (NVIDIA, ... D3D11)` renderer describes a computer that
-cannot exist, and that single contradiction is *more* identifying than the honest
-values would have been.
+Группировка в стиле Dolphin Anty: боковая панель с живыми счётчиками, переименование
+по Enter, контекстное меню, подменю **Move to** на каждой строке.
 
-So the value pools are keyed by platform and drawn per platform, never mixed:
+**Удаление папки никогда не удаляет профили внутри** — они переезжают в корень.
+Удаление контейнера в файловом менеджере забирает содержимое, но профиль — это
+проделанная работа, отлежавшаяся личность с cookies и историей, и потерять несколько
+таких из-за одного промаха по ярлыку группировки недопустимо.
 
-- **GPU vendor and renderer are stored as pairs**, so "Apple Inc." can never be
-  emitted with a Radeon renderer.
-- **Screen resolutions are per-OS** — Apple has never shipped a 1366×768 panel.
-- **Locale and timezone are offered together** — `de-DE` in `Asia/Tokyo` is a
-  contradiction a site can test for in one line of JavaScript.
-- **`deviceMemory` is powers of two only**, because that is the entire set of values
-  the API is specified to report.
+### Хранилище, которое не теряет работу
 
-The distributions are also deliberately lumpy rather than uniform. 1920×1080 appears
-three times in the Windows screen pool because it is genuinely modal. Sampling
-uniformly from a set of plausible values produces a population that is itself
-implausible — a profile holding a 1-in-9 screen size stands out more, not less.
+- **Атомарная запись** — сначала во временный файл, затем переименование. Падение
+  посреди сохранения оставляет прежний файл целым, а не обрезанным.
+- **Повреждённые файлы отправляются в карантин, а не перезаписываются.** Если
+  `profiles.json` не разбирается, он отодвигается в сторону, а приложение открывается
+  пустым с сообщением, где искать файл. Пустой список неотличим от «приложение
+  выбросило вашу работу», поэтому оно говорит, куда делись байты.
+- **Один нечитаемый профиль не прячет остальные** — плохая запись пропускается с
+  сообщением, прочие загружаются.
+- **Миграция с проверкой версии.** Заполнение поля выполняется только для профилей
+  ниже той версии, где поле появилось, поэтому осознанно очищенное значение
+  не воскресает.
 
-### Folders
+### Значки с номерами
 
-Grouping, like Dolphin Anty: a sidebar with live counts, inline rename on Enter,
-right-click for rename/delete, and a **Move to** submenu on every row.
-
-**Deleting a folder never deletes the profiles inside it.** They move to the root.
-Deleting a container in a file manager takes its contents, but a profile represents
-real work — an aged identity with cookies and history — and losing several to one
-misclick on a grouping label would be indefensible.
-
-### Storage that does not lose your work
-
-- **Atomic writes** — write to a temp file, then rename. A crash mid-save leaves the
-  previous file intact rather than a truncated one.
-- **Corrupt files are quarantined, not overwritten.** If `profiles.json` cannot be
-  parsed it is moved aside and the app opens empty with a message naming the file.
-  An empty list is indistinguishable from the app having thrown your work away, so
-  it says where the bytes went.
-- **One unreadable profile does not hide the others.** A single bad entry is skipped
-  and reported; the rest load.
-- **Version-gated migration.** Backfill only runs for profiles below the version that
-  introduced a field, so an explicitly cleared value is never resurrected.
-
-### Per-instance taskbar badges
-
-Each running session gets a numbered icon so twelve open windows are still tellable
-apart — a real `.ico` on Windows, `.icns` on macOS, and X11 window icons on Linux.
+Каждая запущенная сессия получает пронумерованный значок, так что двенадцать открытых
+окон остаются различимыми: настоящий `.ico` на Windows, `.icns` на macOS и иконки окон
+X11 на Linux.
 
 ---
 
-## Build from source
+## Автоматизация
 
-Needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). Nothing else.
+Локальный REST API позволяет управлять Hub из скрипта: получить список профилей,
+запустить нужный, забрать CDP-эндпоинт, подключить Puppeteer, Playwright или Selenium
+и остановить сессию. Именно ради этого класса задач — массовых операций с аккаунтами,
+проверок по расписанию, сбора данных под стабильной личностью — анти-детект браузер
+обычно и покупают.
+
+Включается в **Settings → Automation**. Токен генерируется автоматически.
+
+| Метод и путь | Действие |
+|---|---|
+| `GET /health` | Проверка доступности |
+| `GET /profiles` | Список профилей |
+| `POST /profiles` | Создать профиль |
+| `GET /profiles/{id}` | Получить профиль |
+| `PATCH /profiles/{id}` | Изменить профиль |
+| `DELETE /profiles/{id}` | Удалить профиль |
+| `POST /profiles/{id}/start` | Запустить сессию |
+| `POST /profiles/{id}/stop` | Остановить сессию |
+| `GET /profiles/{id}/endpoint` | Получить CDP-эндпоинт |
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7317/profiles
+```
+
+```js
+// Puppeteer
+const { wsEndpoint } = await fetch(
+  `http://127.0.0.1:7317/profiles/${id}/start`,
+  { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+).then(r => r.json());
+
+const browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+```
+
+Ответ `start` содержит `wsEndpoint`, `httpEndpoint`, `port`, `profileId`, `profileName`
+и `alreadyRunning`. Повторный вызов на уже запущенном профиле — не ошибка: возвращается
+тот же эндпоинт с `alreadyRunning: true`, поэтому ретрай после таймаута клиента
+безопасен.
+
+**Как устроена безопасность API.** Эндпоинт выдаёт CDP-ссылки, которые дают полный
+контроль над страницей и доступ к cookies, поэтому:
+
+- слушает **только loopback** — настройки хоста намеренно не существует;
+- **токен обязателен на каждом запросе** и сравнивается за постоянное время.
+  JavaScript открытой страницы может обратиться к `127.0.0.1`, так что «это же
+  локально» само по себе не граница;
+- **сервер отказывается стартовать включённым без токена**, а не выдумывает его
+  молча: файл настроек со словами «enabled, no token» должен быть виден тому,
+  кто ему доверяет;
+- **заголовок `Access-Control-Allow-Origin` не отправляется никогда**, а preflight
+  отклоняется явно, поэтому чужая страница не прочитает ответ.
+
+---
+
+## Сборка из исходников
+
+Нужен только [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```bash
 git clone https://github.com/evelaa123/Cloakbrowser-Hub.git
 cd Cloakbrowser-Hub/dotnet
 
-dotnet build                # 0 warnings expected — warnings are errors here
-dotnet test                 # 342 tests
+dotnet build                # 0 предупреждений — они здесь ошибки
+dotnet test                 # 673 теста
 dotnet run --project src/CloakHub.App
 ```
 
-### Publishing a single-file binary
+### Сборка одного файла
 
 ```bash
 # Windows
@@ -169,104 +216,227 @@ dotnet publish src/CloakHub.App/CloakHub.App.csproj -c Release -r linux-x64 \
   -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
   -p:DebugType=none -o artifacts/linux-x64
 
-# macOS (Apple Silicon; use osx-x64 for Intel)
+# macOS (Apple Silicon; для Intel — osx-x64)
 dotnet publish src/CloakHub.App/CloakHub.App.csproj -c Release -r osx-arm64 \
   --self-contained true -p:PublishSingleFile=true \
   -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/osx-arm64
 ```
 
-### Diagnostics CLI
+### Диагностика
 
-`CloakHub.Doctor` prints what the app would do without launching anything — the exact
-browser arguments a profile produces, host detection, badge planning, network checks.
+`CloakHub.Doctor` печатает то, что сделало бы приложение, ничего не запуская: точные
+аргументы браузера для профиля, определение хоста, планирование значков, сетевые проверки.
 
 ```bash
 dotnet run --project src/CloakHub.Doctor -- --help
 ```
 
+### Иконки
+
+Весь набор иконок выводится из одного мастер-файла, поэтому размеры не могут разойтись
+между собой:
+
+```bash
+python3 build/make-icon.py      # нужен Pillow
+```
+
 ---
 
-## How it works
+## Непрерывная интеграция
+
+В репозитории workflow нет: токен, которым велась разработка, не имеет права
+`workflows`, поэтому файл нужно добавить вручную. Ниже готовая конфигурация —
+положите её в `.github/workflows/ci.yml`.
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main, genspark_ai_developer]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Кеш восстановленных пакетов; ключ по хешу всех .csproj.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('dotnet/**/*.csproj') }}
+          restore-keys: nuget-
+
+      - name: Restore
+        run: dotnet restore dotnet/CloakBrowserHub.sln
+
+      # -warnaserror держит планку: в проекте включён TreatWarningsAsErrors,
+      # и сборка должна падать на первом же предупреждении, а не копить их.
+      - name: Build
+        run: dotnet build dotnet/CloakBrowserHub.sln -c Release --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test dotnet/CloakBrowserHub.sln -c Release --no-build --verbosity normal
+```
+
+Тестам не нужен дисплей: вся логика лежит в `CloakHub.Core`, у которого нет
+зависимости от UI, поэтому `ubuntu-latest` без X11 подходит полностью.
+
+### Сборка релизов по тегу
+
+Отдельный workflow — `.github/workflows/release.yml`. Срабатывает на теги вида `v*`
+и прикладывает бинарники к релизу GitHub:
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write        # нужно, чтобы создать релиз и залить файлы
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false   # сборка под Linux не должна отменять сборку под Windows
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        shell: bash
+        run: |
+          dotnet publish dotnet/src/CloakHub.App/CloakHub.App.csproj \
+            -c Release -r ${{ matrix.rid }} --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:DebugType=none \
+            -o artifacts/${{ matrix.rid }}
+
+      - name: Package
+        shell: bash
+        run: |
+          cd artifacts/${{ matrix.rid }}
+          if [ "${{ matrix.rid }}" = "win-x64" ]; then
+            7z a ../../CloakBrowserHub-${{ matrix.rid }}.zip .
+          else
+            chmod +x CloakBrowserHub
+            tar -czf ../../CloakBrowserHub-${{ matrix.rid }}.tar.gz .
+          fi
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: CloakBrowserHub-${{ matrix.rid }}.*
+```
+
+Дополнительных секретов не требуется: `GITHUB_TOKEN` выдаётся автоматически, а
+`permissions: contents: write` даёт ему право создать релиз. Подписи кода здесь нет —
+если понадобится подписывать Windows-сборку, добавьте шаг с `signtool` и сертификатом
+из секретов репозитория.
+
+---
+
+## Устройство
 
 ```
 dotnet/
 ├── src/
-│   ├── CloakHub.Core/          # No UI. All logic, fully testable.
-│   │   ├── Model/              # Profile, Fingerprint, Defaults (pools + factory)
+│   ├── CloakHub.Core/          # Без UI. Вся логика, полностью тестируемая.
+│   │   ├── Model/              # Profile, Fingerprint, Defaults (пулы + фабрика)
 │   │   ├── Storage/            # ProfileStore, JsonStore, ProfileMigration
 │   │   ├── Launch/             # FingerprintArgs, PrivacyArgs, SessionManager
-│   │   ├── Branding/           # Per-instance badge icons (.ico/.icns/X11)
-│   │   ├── Licensing/          # Key parsing, session limits
-│   │   ├── Network/            # MAC address planning
-│   │   └── Platform/           # Host OS detection
-│   ├── CloakHub.App/           # Avalonia UI — views and view models only
-│   └── CloakHub.Doctor/        # Diagnostics CLI
+│   │   ├── Import/             # Автопоиск браузеров, архивы, клонирование
+│   │   ├── Cookies/            # Разбор, проверка, запись в Chromium DB
+│   │   ├── Automation/         # Локальный REST API
+│   │   ├── Binaries/           # Манифест релизов, проверка подписи, установка
+│   │   ├── Branding/           # Значки сессий (.ico/.icns/X11)
+│   │   ├── Licensing/          # Разбор ключей, лимиты сессий
+│   │   ├── Network/            # Планирование MAC-адресов
+│   │   └── Platform/           # Определение ОС
+│   ├── CloakHub.App/           # Avalonia UI — только представления и view models
+│   └── CloakHub.Doctor/        # Диагностическая CLI
 └── tests/
-    └── CloakHub.Core.Tests/    # 342 xUnit tests
+    ├── CloakHub.Core.Tests/    # 651 тест
+    └── CloakHub.App.Tests/     # 22 теста
 ```
 
-**Core holds every decision; the UI holds none.** The UI project contains no
-fingerprint logic, no file format knowledge and no argument building. That is why the
-diagnostics CLI can produce byte-identical launch arguments to the app — they call the
-same code — and why the rules are testable without a display server.
+**Все решения принимает Core, UI не принимает ни одного.** В UI-проекте нет логики
+отпечатков, знания о формате файлов и построения аргументов. Поэтому диагностическая
+CLI выдаёт побайтово те же аргументы запуска, что и приложение — они вызывают один код —
+и поэтому правила тестируются без графической сессии.
 
-Two conventions worth knowing before contributing:
+Две договорённости, которые стоит знать перед контрибьютом:
 
-- **Warnings are errors** (`TreatWarningsAsErrors`). The build has zero warnings and
-  should stay that way.
-- **Compiled bindings are on by default.** Every view declares `x:DataType`, so a
-  binding to a property that does not exist is a build error rather than a silently
-  empty field at runtime.
+- **Предупреждения — это ошибки** (`TreatWarningsAsErrors`). В сборке ноль
+  предупреждений, и так должно остаться.
+- **Компилируемые привязки включены по умолчанию.** Каждое представление объявляет
+  `x:DataType`, поэтому привязка к несуществующему свойству — ошибка сборки, а не
+  молча пустое поле в рантайме.
 
-### Where your data lives
+### Где лежат данные
 
-| OS | Path |
+| ОС | Путь |
 |---|---|
 | Windows | `%APPDATA%\CloakBrowserHub\` |
 | macOS | `~/Library/Application Support/CloakBrowserHub/` |
 | Linux | `~/.config/CloakBrowserHub/` |
 
-`profiles.json` holds the profiles and folders; `settings.json` holds preferences.
-Profile browser data goes in a `profiles/` subdirectory, relocatable in Settings.
+`profiles.json` хранит профили и папки, `settings.json` — настройки. Данные браузера
+лежат в подкаталоге `profiles/`, его можно перенести в настройках.
 
 ---
 
-## History
+## История
 
-This project began as an Electron + Preact application. It is being rewritten in
-.NET 8 + Avalonia, and **the .NET implementation is now the basis of this
-repository** — a single toolchain, a single language, and a ~40 MB self-contained
-binary instead of a bundled Chromium runtime.
+Проект начинался как приложение на Electron + Preact и переписан на .NET 8 + Avalonia.
+Переход завершён: один тулчейн, один язык и самодостаточный бинарник вместо
+поставляемого в комплекте Chromium.
 
-The rewrite is not finished. The Electron sources remain in `src/` and `tests/`
-precisely because they still implement things the .NET app does not: cookie
-import/export, the proxy library and checker, browser importers, the automation HTTP
-API, and — most importantly — actually launching a browser. Deleting them now would
-destroy the only working implementation of those features and the reference the port
-is being written against.
-
-They will be removed once the table in [What works today](#what-works-today) has no
-gaps left.
+Electron-реализация целиком сохранена в ветке
+[`electron-legacy`](../../tree/electron-legacy) — она остаётся рабочей и доступной
+для справки.
 
 ---
 
-## Limitations worth stating plainly
+## Что стоит понимать
 
-- **MAC address and device name do not affect your browser fingerprint.** No web API
-  exposes them — not `navigator`, not WebRTC, not WebGL. They change what the *local
-  network* sees. They are modelled because other tools offer them and users
-  reasonably ask, and the UI states the limitation rather than implying a benefit.
-- **Per-surface noise currently collapses to one flag.** The CloakBrowser binary
-  exposes a single `--fingerprint-noise` switch covering canvas, WebGL, audio and
-  client rects together. The four values are stored separately so the UI can already
-  offer the control users expect and a future binary needs no migration — but today
-  any surface asking for noise enables it for all of them.
-- **No fingerprint is undetectable.** A sufficiently determined site can detect that
-  values are being spoofed at all. The goal here is to stop *correlation* between
-  your profiles, which is a much more achievable and more useful property.
+- **MAC-адрес и имя устройства не влияют на отпечаток браузера.** Ни один веб-API их
+  не отдаёт — ни `navigator`, ни WebRTC, ни WebGL. Они меняют то, что видит *локальная
+  сеть*. Они смоделированы, потому что так делают другие инструменты и пользователи
+  закономерно об этом спрашивают, и интерфейс прямо говорит об ограничении, а не
+  намекает на несуществующую пользу.
+- **Пошумовые настройки пока сводятся к одному флагу.** Бинарник CloakBrowser
+  предоставляет единственный переключатель `--fingerprint-noise`, покрывающий canvas,
+  WebGL, audio и client rects разом. Четыре значения хранятся раздельно, чтобы
+  интерфейс уже давал привычный контроль, а будущему бинарнику не потребовалась
+  миграция — но сегодня запрос шума на любой поверхности включает его для всех.
+- **Неопределяемых отпечатков не бывает.** Достаточно упорный сайт способен заметить
+  сам факт подмены значений. Задача здесь — не дать связать *ваши профили между собой*,
+  и это свойство и достижимее, и полезнее.
 
 ---
 
-## License
+## Лицензия
 
 MIT.
