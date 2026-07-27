@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -88,7 +89,7 @@ public sealed class AutomationServer : IAsyncDisposable
             // in use" is something the user fixes in Settings, and the platform
             // error code does not tell them that.
             throw new InvalidOperationException(
-                e.ErrorCode is 48 or 98 or 183
+                PortIsTaken(settings.Port)
                     ? $"Port {settings.Port} is already in use. Pick another in Settings."
                     : $"Could not start the automation API on port {settings.Port}: {e.Message}",
                 e);
@@ -100,6 +101,50 @@ public sealed class AutomationServer : IAsyncDisposable
         _loop = Task.Run(() => AcceptLoopAsync(listener, _stopping.Token), CancellationToken.None);
 
         _host.Log($"Automation API listening on http://127.0.0.1:{settings.Port}");
+    }
+
+    /// <summary>
+    /// Whether the port is genuinely occupied, asked of the OS rather than inferred
+    /// from the error code.
+    /// <para>
+    /// <see cref="HttpListenerException.ErrorCode"/> cannot be matched against a
+    /// fixed list here. On Windows a conflict is <c>ERROR_ALREADY_EXISTS</c> (183);
+    /// on Linux and macOS the managed listener reports a bare <c>EADDRINUSE</c> (98
+    /// / 48) only when a foreign process holds the socket, but raises <b>400</b>
+    /// when the clash is with another <see cref="HttpListener"/> registration in
+    /// this same process — and 400 on Windows means
+    /// <c>ERROR_INVALID_PARAMETER</c>, an unrelated failure. Any hardcoded list is
+    /// therefore either incomplete or wrong depending on the platform, and the
+    /// symptom is silent: the user just gets an opaque message instead of the one
+    /// telling them to change the port.
+    /// </para>
+    /// <para>
+    /// Attempting the bind answers the question directly and identically everywhere.
+    /// It runs only after a start has already failed, so it costs nothing on the
+    /// success path and cannot steal the port from the listener we were opening.
+    /// A permission failure on a privileged port is deliberately <b>not</b> reported
+    /// as a conflict, because telling someone a free port is "in use" sends them
+    /// looking for a process that does not exist.
+    /// </para>
+    /// </summary>
+    private static bool PortIsTaken(int port)
+    {
+        try
+        {
+            using var probe = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            probe.Bind(new IPEndPoint(IPAddress.Loopback, port));
+            return false;
+        }
+        catch (SocketException e)
+        {
+            return e.SocketErrorCode is SocketError.AddressAlreadyInUse;
+        }
+        catch (Exception)
+        {
+            // The probe is a diagnostic. If it cannot run, fall back to the generic
+            // message rather than letting a secondary failure mask the real one.
+            return false;
+        }
     }
 
     public async Task StopAsync()
