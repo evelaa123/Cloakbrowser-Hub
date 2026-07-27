@@ -121,20 +121,11 @@
       <views:ProxiesView DataContext="{Binding ProxiesPage}"
                          IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsProxies}" />
 
-      <!--
-        Import and Licence are still placeholders. They say so explicitly rather
-        than showing an empty pane, because a blank screen is indistinguishable from
-        a page that failed to load.
-      -->
-      <views:PlaceholderView IsVisible="{Binding IsImport}"
-                             Heading="Import"
-                             Subheading="Bring profiles in from elsewhere"
-                             Detail="Importers for Chrome, Firefox and other anti-detect browsers have not been ported yet." />
+      <views:ImportView DataContext="{Binding ImportPage}"
+                        IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsImport}" />
 
-      <views:PlaceholderView IsVisible="{Binding IsLicense}"
-                             Heading="License"
-                             Subheading="Activation and seats"
-                             Detail="Activation has not been ported yet. Without a key the session limit falls back to your own preference rather than being blocked." />
+      <views:LicenseView DataContext="{Binding LicensePage}"
+                         IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsLicense}" />
 
       <!-- Toasts: bottom-right, above everything, not hit-testable except the close button. -->
       <ItemsControl ItemsSource="{Binding Toasts.Items}"

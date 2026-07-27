@@ -1,0 +1,304 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CloakHub.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.LicenseView"
+             x:DataType="vm:LicensePageViewModel">
+
+  <Panel>
+
+    <Grid RowDefinitions="Auto,*">
+
+      <!-- ================================================================
+           Topbar
+           ================================================================ -->
+      <Border Grid.Row="0" Padding="22,18"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="*,Auto">
+
+          <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Classes="h1" Text="License" />
+            <TextBlock Classes="sub" Text="CloakBrowser key and stealth browser binary" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                      VerticalAlignment="Center">
+            <Button Classes="ghost" Content="{Binding RefreshLabel}"
+                    Command="{Binding RefreshCommand}" />
+            <Button Classes="ghost" Content="View plans"
+                    Command="{Binding PricingCommand}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ================================================================
+           Body
+           ================================================================ -->
+      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="22" Spacing="14" MaxWidth="980" HorizontalAlignment="Left">
+
+          <!-- ============================================================
+               Current licence
+               ============================================================ -->
+          <Border Classes="card" Padding="20">
+            <StackPanel Spacing="14">
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Current license" FontWeight="SemiBold" />
+                <!--
+                  The shared path is worth stating: activating here also covers the
+                  user's own cloakbrowser CLI scripts, which is not something they
+                  would guess.
+                -->
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="The key is stored at ~/.cloakbrowser/license.key — the same file the cloakbrowser CLI reads, so activating here also covers your own scripts on this machine." />
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,*,*,*" Margin="0,2,0,0">
+                <StackPanel Grid.Column="0" Spacing="4">
+                  <TextBlock Classes="th" Text="TIER" />
+                  <TextBlock Text="{Binding TierText}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <TextBlock Classes="th" Text="KEY" />
+                  <TextBlock Classes="mono" Text="{Binding MaskedKey}"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                  <TextBlock Classes="th" Text="SESSIONS" />
+                  <TextBlock Text="{Binding SessionsText}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Spacing="4">
+                  <TextBlock Classes="th" Text="CHECKED" />
+                  <TextBlock Text="{Binding CheckedText}" />
+                </StackPanel>
+              </Grid>
+
+              <!--
+                Warn or error depending on the cause. "Could not reach the server" and
+                "this key is invalid" call for opposite actions from the user, so they
+                must not look the same.
+              -->
+              <Border Classes="callout" Classes.warn="{Binding ErrorIsWarning}"
+                      Classes.err="{Binding !ErrorIsWarning}"
+                      IsVisible="{Binding HasError}">
+                <TextBlock TextWrapping="Wrap" Text="{Binding ErrorText}" />
+              </Border>
+
+              <Border Classes="callout" IsVisible="{Binding HasExpiry}">
+                <TextBlock TextWrapping="Wrap" Text="{Binding ExpiryText}" />
+              </Border>
+
+              <Border Classes="callout warn" IsVisible="{Binding FromEnvironment}">
+                <TextBlock TextWrapping="Wrap"
+                           Text="This key comes from the CLOAKBROWSER_LICENSE_KEY environment variable, which overrides the key file. Removing the key here will not change the tier until that variable is unset." />
+              </Border>
+
+              <Button Classes="danger" Content="Remove key"
+                      HorizontalAlignment="Left"
+                      IsVisible="{Binding HasKey}"
+                      Command="{Binding AskRemoveCommand}" />
+
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================
+               Getting and activating a key
+               ============================================================ -->
+          <Border Classes="card" Padding="20">
+            <StackPanel Spacing="14">
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Get a free key with GitHub" FontWeight="SemiBold" />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="A free key unlocks the latest browser build and one concurrent session. Sign-in happens in your normal browser; CloakBrowser then emails the key to your GitHub address." />
+              </StackPanel>
+
+              <StackPanel Spacing="6" Margin="4,0,0,0">
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="1.  Press the button below — your browser opens the GitHub sign-in page." />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="2.  Authorise CloakBrowser; the key arrives by email within a minute." />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="3.  Paste it into the field below and press Activate." />
+              </StackPanel>
+
+              <Button Classes="primary" Content="Sign in with GitHub"
+                      HorizontalAlignment="Left"
+                      Command="{Binding SignInCommand}" />
+
+              <TextBlock Text="Activate a key" FontWeight="SemiBold" Margin="0,6,0,0" />
+
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Grid.Column="0" Classes="mono"
+                         Watermark="Paste your free or paid license key"
+                         Text="{Binding KeyInput, Mode=TwoWay}" />
+                <Button Grid.Column="1" Classes="primary"
+                        Content="{Binding ActivateLabel}"
+                        Command="{Binding ActivateCommand}" />
+              </Grid>
+
+              <!--
+                Says what happens on failure, because the alternative design — save
+                first, check later — is the one that loses a working key to a typo.
+              -->
+              <TextBlock Classes="faint" TextWrapping="Wrap"
+                         Text="The key is checked with the license server as soon as it is saved. If the server cannot be reached the key is still stored, because the browser reads the same file directly and does not need our approval to use it." />
+
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================
+               Binary
+               ============================================================ -->
+          <Border Classes="card" Padding="20">
+            <StackPanel Spacing="14">
+
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,12,0">
+                  <TextBlock Text="Stealth browser binary" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             Text="A patched Chromium downloaded on demand, not bundled with this app — that keeps the installer small and lets you update the browser without updating the Hub." />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                            VerticalAlignment="Top">
+                  <Button Classes="ghost" Content="Stop"
+                          IsVisible="{Binding IsDownloading}"
+                          Command="{Binding CancelDownloadCommand}" />
+                  <Button Classes="primary" Content="{Binding DownloadLabel}"
+                          Command="{Binding DownloadCommand}" />
+                </StackPanel>
+              </Grid>
+
+              <Grid ColumnDefinitions="*,*,*,*" Margin="0,2,0,0">
+                <StackPanel Grid.Column="0" Spacing="4">
+                  <TextBlock Classes="th" Text="STATUS" />
+                  <TextBlock Text="{Binding BinaryStatusText}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <TextBlock Classes="th" Text="VERSION" />
+                  <TextBlock Classes="mono" Text="{Binding BinaryVersion}"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                  <TextBlock Classes="th" Text="BUILD" />
+                  <TextBlock Text="{Binding BinaryBuildText}" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Spacing="4">
+                  <TextBlock Classes="th" Text="PLATFORM" />
+                  <TextBlock Classes="mono" Text="{Binding BinaryPlatform}" />
+                </StackPanel>
+              </Grid>
+
+              <Border Classes="callout err" IsVisible="{Binding HasBinaryError}">
+                <TextBlock TextWrapping="Wrap" Text="{Binding BinaryError}" />
+              </Border>
+
+              <Border Classes="callout" IsVisible="{Binding UpdateAvailable}">
+                <TextBlock TextWrapping="Wrap" Text="{Binding UpdateText}" />
+              </Border>
+
+              <Border Classes="callout" IsVisible="{Binding IsDownloading}">
+                <StackPanel Spacing="6">
+                  <TextBlock TextWrapping="Wrap"
+                             Text="Downloading the browser — this is a few hundred megabytes on a first run and may take a couple of minutes. You can keep using the rest of the app." />
+                  <!-- The byte count is what separates "working" from "hung". -->
+                  <TextBlock Classes="mono faint" FontSize="11" Text="{Binding ProgressText}" />
+                </StackPanel>
+              </Border>
+
+              <StackPanel Spacing="6" IsVisible="{Binding HasBinaryPath}">
+                <TextBlock Classes="th" Text="BINARY PATH" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Grid.Column="0" Classes="faint mono" FontSize="11"
+                             VerticalAlignment="Center"
+                             TextWrapping="Wrap"
+                             Text="{Binding BinaryPath}" />
+                  <Button Grid.Column="1" Classes="ghost" Content="Open folder"
+                          VerticalAlignment="Center"
+                          Command="{Binding OpenBinaryFolderCommand}" />
+                </Grid>
+              </StackPanel>
+
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================
+               Tier table
+               ============================================================ -->
+          <Border Classes="card" Padding="20">
+            <StackPanel Spacing="12">
+
+              <TextBlock Text="What each tier gives you" FontWeight="SemiBold" />
+
+              <Grid ColumnDefinitions="1.2*,1.4*,1.4*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                    Margin="0,2,0,0">
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="th" Text="TIER" Margin="0,0,0,8" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Classes="th" Text="BROWSER BUILD" Margin="0,0,0,8" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Classes="th" Text="CONCURRENT SESSIONS" Margin="0,0,0,8" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="No key" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="dim" Text="Older free build" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Classes="dim" Text="Not tracked" Margin="0,0,0,6" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Free (GitHub)" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Classes="dim" Text="Latest" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Classes="dim" Text="1" Margin="0,0,0,6" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Solo" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Classes="dim" Text="Latest" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Classes="dim" Text="5" Margin="0,0,0,6" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Team" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Classes="dim" Text="Latest" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="4" Grid.Column="2" Classes="dim" Text="20" Margin="0,0,0,6" />
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Scale" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="5" Grid.Column="1" Classes="dim" Text="Latest" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="5" Grid.Column="2" Classes="dim" Text="200" Margin="0,0,0,6" />
+
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="Enterprise" />
+                <TextBlock Grid.Row="6" Grid.Column="1" Classes="dim" Text="Latest" />
+                <TextBlock Grid.Row="6" Grid.Column="2" Classes="dim" Text="Negotiated" />
+              </Grid>
+
+              <TextBlock Classes="faint" TextWrapping="Wrap"
+                         Text="The seat limit is enforced by the browser itself, not by this app. Exceeding it makes a launch fail with a clear message rather than starting a degraded session." />
+
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- ==================================================================
+         Confirm removing the key
+         ================================================================== -->
+    <Border IsVisible="{Binding IsRemoveOpen}"
+            Background="{DynamicResource BgBrush}">
+      <Border Classes="card" Padding="24" MaxWidth="520"
+              HorizontalAlignment="Center" VerticalAlignment="Center"
+              Background="{DynamicResource BgElevatedBrush}">
+        <StackPanel Spacing="16">
+          <TextBlock Text="Remove the license key?" FontWeight="SemiBold" FontSize="15" />
+          <!--
+            Names what survives as well as what goes. The fear here is losing
+            profiles, and not saying they are untouched leaves the user to guess.
+          -->
+          <TextBlock Classes="dim" TextWrapping="Wrap"
+                     Text="The key file is deleted. Sessions fall back to the older free browser build until you activate a key again. Your profiles and cookies are untouched." />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Classes="ghost" Content="Cancel" Command="{Binding CancelRemoveCommand}" />
+            <Button Classes="danger" Content="Remove key" Command="{Binding ConfirmRemoveCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
+  </Panel>
+</UserControl>

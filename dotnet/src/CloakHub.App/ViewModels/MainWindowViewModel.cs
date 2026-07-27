@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CloakHub.App.Services;
+using CloakHub.Core.Binaries;
 using CloakHub.Core.Launch;
+using CloakHub.Core.Licensing;
 using CloakHub.Core.Model;
 using CloakHub.Core.Platform;
 using CloakHub.Core.Storage;
@@ -22,11 +24,13 @@ public enum Route { Profiles, Proxies, Import, License, Settings }
 /// would let two screens disagree about what is stored.
 /// </para>
 /// </summary>
-public sealed class MainWindowViewModel : ViewModelBase
+public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly ProfileStore _profiles;
     private readonly SettingsStore _settings;
     private readonly HubPaths _paths;
+    private readonly LicenseService _license;
+    private readonly BinaryInstaller _binaries;
 
     public MainWindowViewModel(
         ProfileStore profiles,
@@ -39,11 +43,23 @@ public sealed class MainWindowViewModel : ViewModelBase
         _settings = settings;
         _paths = paths;
 
+        // Owned by the shell rather than the licence page, because the sidebar badge
+        // reads the tier on every screen and the launch path needs the seat limit.
+        // A page-local instance would make "what licence do I have" depend on which
+        // screen happens to be open.
+        _license = new LicenseService();
+        _binaries = new BinaryInstaller();
+
         Toasts = new ToastHost();
 
         ProfilesPage = new ProfilesPageViewModel(profiles, proxies, settings, paths, Toasts, sessions);
         ProxiesPage = new ProxiesPageViewModel(proxies, profiles, Toasts);
         SettingsPage = new SettingsPageViewModel(settings, paths, Toasts, OnThemeChanged, OnZoomChanged);
+        ImportPage = new ImportPageViewModel(profiles, settings, paths, Toasts, () => Navigate(Route.Profiles));
+        LicensePage = new LicensePageViewModel(
+            _license, _binaries, settings, Toasts,
+            localSessions: () => ProfilesPage.RunningCount,
+            onChanged: RefreshTier);
 
         // The window scales against this, so it has to start at the stored value --
         // otherwise the app opens at 100% and only jumps to the user's size when they
@@ -81,6 +97,11 @@ public sealed class MainWindowViewModel : ViewModelBase
     public ProfilesPageViewModel ProfilesPage { get; }
     public ProxiesPageViewModel ProxiesPage { get; }
     public SettingsPageViewModel SettingsPage { get; }
+    public ImportPageViewModel ImportPage { get; }
+    public LicensePageViewModel LicensePage { get; }
+
+    /// <summary>The licence, shared so the launch path can resolve the seat limit.</summary>
+    public LicenseService License => _license;
 
     public IReadOnlyList<NavItem> NavItems { get; }
 
@@ -121,6 +142,17 @@ public sealed class MainWindowViewModel : ViewModelBase
         // is far simpler than invalidating from every one of those paths.
         if (route == Route.Profiles) ProfilesPage.Refresh();
         if (route == Route.Proxies) ProxiesPage.Refresh();
+
+        // Scanned on first visit rather than on every one. The walk stats thousands
+        // of files to size each profile, and repeating it whenever the user tabs back
+        // would make the page feel slower the more they use it. Re-scan is a button.
+        if (route == Route.Import) ImportPage.EnsureScanned();
+
+        // Checked on first visit rather than at startup: the licence server is a
+        // network round trip and nothing on the launch path waits for it -- the seat
+        // limit falls back to the user's preference when unknown, and the browser
+        // binary reads the key file itself.
+        if (route == Route.License) LicensePage.EnsureLoaded();
     }
 
     /// <summary>Running session count, for the sidebar badge.</summary>
@@ -133,14 +165,23 @@ public sealed class MainWindowViewModel : ViewModelBase
     /// <summary>
     /// Licence tier label.
     /// <para>
-    /// Reports "No key" rather than assuming a tier when nothing is activated. A
-    /// licence lookup needs the network, and an offline launch must not silently
-    /// present the app as unlicensed-but-fine or as paid.
+    /// Reads the resolved state rather than testing for the key file, so the badge
+    /// distinguishes a checked tier from a key that is merely present — and reports
+    /// "No key" rather than assuming one when nothing is activated. A licence lookup
+    /// needs the network, and an offline launch must not silently present the app as
+    /// unlicensed-but-fine or as paid.
     /// </para>
     /// </summary>
-    public string TierLabel => File.Exists(_paths.LicenseFile) ? "Key present" : "No key";
+    public string TierLabel => _license.Current.HasKey ? _license.Current.TierLabel : "No key";
 
-    public bool HasLicenseKey => File.Exists(_paths.LicenseFile);
+    public bool HasLicenseKey => _license.Current.HasKey;
+
+    /// <summary>Re-read the tier for the sidebar badge after the licence page changes it.</summary>
+    private void RefreshTier()
+    {
+        OnPropertyChanged(nameof(TierLabel));
+        OnPropertyChanged(nameof(HasLicenseKey));
+    }
 
     /// <summary>Version, from the assembly rather than a hardcoded string.</summary>
     public string VersionLabel =>
@@ -188,6 +229,18 @@ public sealed class MainWindowViewModel : ViewModelBase
     public void OnShutdown()
     {
         if (_settings.Current.CloseSessionsOnQuit) ProfilesPage.StopAll();
+
+        // An archive the user opened but never imported from is still unpacked in the
+        // temp directory. Released here rather than left to the OS, because Windows
+        // does not clear %TEMP% on reboot and a browser profile is hundreds of MB.
+        ImportPage.OnShutdown();
+    }
+
+    public void Dispose()
+    {
+        LicensePage.Dispose();
+        _binaries.Dispose();
+        _license.Dispose();
     }
 }
 
