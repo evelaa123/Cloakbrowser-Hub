@@ -1,0 +1,188 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CloakHub.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.ProxiesView"
+             x:DataType="vm:ProxiesPageViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- ================================================================
+         Topbar
+         ================================================================ -->
+    <Border Grid.Row="0" Padding="22,18"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+
+        <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+          <TextBlock Classes="h1" Text="Proxies" />
+          <TextBlock Classes="sub" Text="{Binding CountLabel}" />
+        </StackPanel>
+
+        <!--
+          Progress sits beside the buttons rather than replacing them, so the
+          cancel control stays where the user last saw it instead of the toolbar
+          reflowing the moment a check starts.
+        -->
+        <TextBlock Grid.Column="1" Classes="dim" VerticalAlignment="Center"
+                   Margin="0,0,12,0"
+                   Text="{Binding Progress}"
+                   IsVisible="{Binding IsCheckingAll}" />
+
+        <Button Grid.Column="2" Classes="ghost" Content="Stop"
+                VerticalAlignment="Center" Margin="0,0,8,0"
+                IsVisible="{Binding IsCheckingAll}"
+                Command="{Binding CancelCheckCommand}" />
+
+        <Button Grid.Column="3" Classes="primary" Content="Check all"
+                VerticalAlignment="Center"
+                IsVisible="{Binding IsIdle}"
+                Command="{Binding CheckAllCommand}" />
+      </Grid>
+    </Border>
+
+    <!-- ================================================================
+         Body: the paste box on the left, the library on the right
+         ================================================================ -->
+    <Grid Grid.Row="1" ColumnDefinitions="320,*">
+
+      <Border Grid.Column="0" Classes="sidebar" Padding="16"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <StackPanel Spacing="10">
+
+          <TextBlock Text="Import" FontWeight="SemiBold" />
+
+          <!--
+            One text area rather than host/port/user/pass fields. The input is
+            always a block a provider generated, and splitting two hundred lines
+            into four fields each by hand is the slowest way to do this.
+          -->
+          <TextBlock Classes="dim" TextWrapping="Wrap"
+                     Text="Paste a list from your provider. Most layouts are understood, including host:port, host:port:user:pass and scheme://user:pass@host:port." />
+
+          <TextBox Height="220" AcceptsReturn="True" TextWrapping="NoWrap"
+                   VerticalContentAlignment="Top"
+                   Watermark="1.2.3.4:8080:user:pass&#x0a;socks5://10.0.0.1:1080"
+                   Text="{Binding ImportText, Mode=TwoWay}" />
+
+          <!--
+            The parse result is shown live, before the button is pressed. A format
+            the parser does not know reads as a wall of failures, and finding that
+            out beforehand is much better than after committing the import.
+          -->
+          <TextBlock Classes="dim" TextWrapping="Wrap"
+                     Text="{Binding ImportPreview}" />
+
+          <Button Classes="primary" Content="Add to library"
+                  HorizontalAlignment="Stretch"
+                  IsEnabled="{Binding CanImport}"
+                  Command="{Binding ImportCommand}" />
+
+          <Button Classes="ghost" Content="Clear library"
+                  HorizontalAlignment="Stretch"
+                  Command="{Binding ClearCommand}" />
+
+        </StackPanel>
+      </Border>
+
+      <Panel Grid.Column="1">
+
+        <Border Classes="card" Margin="22" VerticalAlignment="Top" Padding="22"
+                IsVisible="{Binding IsEmpty}">
+          <StackPanel Spacing="8" MaxWidth="520">
+            <TextBlock Text="No saved proxies" FontWeight="SemiBold" />
+            <TextBlock Classes="dim" TextWrapping="Wrap"
+                       Text="Saving a proxy here lets many profiles share one entry, so rotating a provider password is a single edit rather than one per profile. Paste a list on the left to get started." />
+          </StackPanel>
+        </Border>
+
+        <Grid RowDefinitions="Auto,*" Margin="22,16,22,22">
+          <Grid.IsVisible>
+            <Binding Path="Rows.Count" Converter="{x:Static vm:Converters.GreaterThanZero}" />
+          </Grid.IsVisible>
+
+          <!--
+            Header and rows share one column definition, and the actions column is
+            an explicit width for the same reason as the profiles table: Auto
+            measures an empty header cell to zero and the columns stop lining up.
+          -->
+          <Border Grid.Row="0" Padding="12,0,12,8">
+            <Grid ColumnDefinitions="1.4*,90,1.6*,70,200">
+              <TextBlock Grid.Column="0" Classes="th" Text="PROXY" />
+              <TextBlock Grid.Column="1" Classes="th" Text="STATUS" />
+              <TextBlock Grid.Column="2" Classes="th" Text="EXIT IP" />
+              <TextBlock Grid.Column="3" Classes="th" Text="PING" />
+            </Grid>
+          </Border>
+
+          <ListBox Grid.Row="1" ItemsSource="{Binding Rows}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ProxyRowViewModel">
+                <Border Padding="12,9" Margin="0,0,0,2"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                  <Grid ColumnDefinitions="1.4*,90,1.6*,70,200">
+
+                    <StackPanel Grid.Column="0" Spacing="2" Margin="0,0,8,0"
+                                VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                      <!--
+                        The endpoint is always the masked form. Credentials are
+                        usually account-wide and a list row is exactly the kind of
+                        thing that ends up in a screenshot.
+                      -->
+                      <TextBlock Classes="faint mono" FontSize="11"
+                                 Text="{Binding Endpoint}"
+                                 TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Classes="badge" VerticalAlignment="Center"
+                            HorizontalAlignment="Left"
+                            Classes.ok="{Binding IsOk}"
+                            Classes.err="{Binding IsFailed}"
+                            ToolTip.Tip="{Binding Detail}">
+                      <TextBlock Text="{Binding StatusLabel}" />
+                    </Border>
+
+                    <StackPanel Grid.Column="2" Spacing="2" Margin="0,0,8,0"
+                                VerticalAlignment="Center">
+                      <TextBlock Text="{Binding LocationLabel}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <!--
+                        Doubles as the failure reason. The same slot either explains
+                        why the check failed or names the timezone it found, which
+                        keeps the row one line tall in both states.
+                      -->
+                      <TextBlock Classes="faint" FontSize="11"
+                                 Text="{Binding Detail}"
+                                 TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="3" Classes="dim mono" FontSize="11"
+                               VerticalAlignment="Center"
+                               Text="{Binding LatencyLabel}" />
+
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                      <Button Classes="ghost" Content="Check"
+                              IsVisible="{Binding IsIdle}"
+                              Command="{Binding CheckCommand}" />
+                      <Button Classes="ghost" Content="Rotate"
+                              IsVisible="{Binding CanRotate}"
+                              Command="{Binding RotateCommand}" />
+                      <Button Classes="danger" Content="Remove"
+                              Command="{Binding RemoveCommand}" />
+                    </StackPanel>
+
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+
+      </Panel>
+    </Grid>
+  </Grid>
+</UserControl>

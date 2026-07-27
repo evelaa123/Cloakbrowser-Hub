@@ -23,6 +23,7 @@ public partial class App : Application
             var paths = new HubPaths();
             var settings = new SettingsStore(paths.SettingsFile);
             var profiles = new ProfileStore(paths.ProfilesFile);
+            var proxies = new ProxyStore(paths.ProxiesFile);
 
             // One session manager for the process. It owns the live browser handles
             // and the badge-number allocator, and a second instance would hand out
@@ -37,7 +38,7 @@ public partial class App : Application
             // and looks like a bug on a light-theme machine.
             ApplyTheme(settings.Current.Theme);
 
-            var shell = new MainWindowViewModel(profiles, settings, paths, sessions);
+            var shell = new MainWindowViewModel(profiles, proxies, settings, paths, sessions);
 
             desktop.MainWindow = new MainWindow { DataContext = shell };
 

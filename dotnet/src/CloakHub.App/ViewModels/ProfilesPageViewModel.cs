@@ -24,6 +24,7 @@ namespace CloakHub.App.ViewModels;
 public sealed class ProfilesPageViewModel : ViewModelBase
 {
     private readonly ProfileStore _store;
+    private readonly ProxyStore _proxies;
     private readonly SettingsStore _settings;
     private readonly HubPaths _paths;
     private readonly ToastHost _toasts;
@@ -41,12 +42,14 @@ public sealed class ProfilesPageViewModel : ViewModelBase
 
     public ProfilesPageViewModel(
         ProfileStore store,
+        ProxyStore proxies,
         SettingsStore settings,
         HubPaths paths,
         ToastHost toasts,
         SessionManager sessions)
     {
         _store = store;
+        _proxies = proxies;
         _settings = settings;
         _paths = paths;
         _toasts = toasts;
@@ -531,6 +534,7 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             Headless = profile.Startup.Headless,
             Locale = profile.Locale.Locale,
             Timezone = profile.Locale.Timezone,
+            Proxy = ResolveProxy(profile),
             GeoIp = profile.Locale.Mode == LocaleMode.Ip,
             Humanize = profile.Behaviour.Humanize,
             ExtensionPaths = [.. profile.Startup.ExtensionPaths],
@@ -540,6 +544,52 @@ public sealed class ProfilesPageViewModel : ViewModelBase
                 : settings.BrowserVersion,
             ReleaseChannel = settings.ReleaseChannel == ReleaseChannel.Preview ? "preview" : "stable",
         };
+    }
+
+    /// <summary>
+    /// The proxy this profile should launch behind.
+    /// <para>
+    /// A profile may either carry its own endpoint or reference the shared library.
+    /// The library wins when referenced, and is read at launch rather than copied at
+    /// assignment time — that is the whole point of the library: rotating a
+    /// provider's password updates one entry, not every profile using it.
+    /// </para>
+    /// <para>
+    /// A dangling reference falls back to the profile's own settings rather than
+    /// launching direct. Silently using the machine's real IP for a profile the user
+    /// configured to be proxied is the one outcome that must not happen quietly.
+    /// </para>
+    /// </summary>
+    private ProxyConfig? ResolveProxy(Profile profile)
+    {
+        var id = profile.Proxy.SavedProxyId;
+
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            var saved = _proxies.Get(id);
+            if (saved is not null)
+            {
+                // The library owns the endpoint and credentials; the profile keeps
+                // its own bypass and rotation link, which are per-use rather than
+                // per-provider.
+                return new ProxyConfig
+                {
+                    Kind = saved.Kind,
+                    Host = saved.Host,
+                    Port = saved.Port,
+                    Username = saved.Username,
+                    Password = saved.Password,
+                    Bypass = profile.Proxy.Bypass ?? saved.Bypass,
+                    RotationUrl = profile.Proxy.RotationUrl ?? saved.RotationUrl,
+                };
+            }
+
+            _toasts.Warning(
+                $"\"{profile.Name}\" points at a proxy that is no longer in the library. " +
+                "Using the settings stored on the profile.");
+        }
+
+        return profile.Proxy.IsConfigured ? profile.Proxy : null;
     }
 
     /// <summary>

@@ -27,7 +27,18 @@ public sealed record LaunchRequest
     public string? Timezone { get; init; }
     public string? Locale { get; init; }
     public string? UserAgent { get; init; }
-    public object? Proxy { get; init; }
+
+    /// <summary>
+    /// The proxy for this session, or null for a direct connection.
+    /// <para>
+    /// Carried as the model rather than as prebuilt flags because an authenticated
+    /// HTTP proxy may need a loopback relay standing behind it, and the relay has to
+    /// be created and disposed with the session — which the launcher owns and a
+    /// flag list cannot express.
+    /// </para>
+    /// </summary>
+    public ProxyConfig? Proxy { get; init; }
+
     public bool GeoIp { get; init; }
     public bool Humanize { get; init; }
     public List<string> ExtensionPaths { get; init; } = [];

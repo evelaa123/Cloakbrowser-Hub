@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using CloakHub.Core.Network;
 
 namespace CloakHub.Core.Launch;
 
@@ -42,6 +43,13 @@ public sealed class ChromiumLauncher(Func<BinaryResolution>? resolver = null) : 
 
         Directory.CreateDirectory(userDataDir);
 
+        // Built before the process starts because an authenticated HTTP proxy needs
+        // its relay listening before the browser makes its first request. Owned by
+        // the context from here on, so the listener dies with the session.
+        var proxy = request.Proxy is null
+            ? new ProxyLaunch([], null)
+            : ProxyArgs.Build(request.Proxy);
+
         var psi = new ProcessStartInfo
         {
             FileName = executable,
@@ -56,6 +64,9 @@ public sealed class ChromiumLauncher(Func<BinaryResolution>? resolver = null) : 
         };
 
         foreach (var arg in BuildArgs(userDataDir, request))
+            psi.ArgumentList.Add(arg);
+
+        foreach (var arg in proxy.Args)
             psi.ArgumentList.Add(arg);
 
         // The wrapper reads the licence from the environment. Passed per-process
@@ -75,6 +86,7 @@ public sealed class ChromiumLauncher(Func<BinaryResolution>? resolver = null) : 
         if (!process.Start())
         {
             process.Dispose();
+            proxy.Dispose();
             throw new InvalidOperationException($"Could not start {executable}.");
         }
 
@@ -84,7 +96,7 @@ public sealed class ChromiumLauncher(Func<BinaryResolution>? resolver = null) : 
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        var context = new ProcessContext(process);
+        var context = new ProcessContext(process, proxy);
 
         // A browser that dies immediately has almost always failed on its arguments
         // or a missing shared library, and reporting that now — rather than showing
@@ -176,11 +188,23 @@ public sealed class BrowserNotFoundException(string message) : Exception(message
 internal sealed class ProcessContext : ILaunchedContext
 {
     private readonly Process _process;
+
+    /// <summary>
+    /// The proxy relay, when the session needed one.
+    /// <para>
+    /// Held here so its lifetime is exactly the session's. A relay that outlived the
+    /// browser would be a listening socket still holding the user's proxy
+    /// credentials, with nothing left to use it.
+    /// </para>
+    /// </summary>
+    private readonly ProxyLaunch _proxy;
+
     private int _disposed;
 
-    public ProcessContext(Process process)
+    public ProcessContext(Process process, ProxyLaunch proxy)
     {
         _process = process;
+        _proxy = proxy;
 
         // Raised for any exit, including the user closing the last window, which is a
         // perfectly normal way to end a session and must be treated like Stop so
@@ -260,6 +284,7 @@ internal sealed class ProcessContext : ILaunchedContext
         finally
         {
             _process.Dispose();
+            _proxy.Dispose();
         }
     }
 

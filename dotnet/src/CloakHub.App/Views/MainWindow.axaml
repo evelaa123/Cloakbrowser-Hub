@@ -118,16 +118,14 @@
       <views:SettingsView DataContext="{Binding SettingsPage}"
                           IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsSettings}" />
 
+      <views:ProxiesView DataContext="{Binding ProxiesPage}"
+                         IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsProxies}" />
+
       <!--
-        Proxies, Import and Licence are placeholders. They say so explicitly rather
+        Import and Licence are still placeholders. They say so explicitly rather
         than showing an empty pane, because a blank screen is indistinguishable from
         a page that failed to load.
       -->
-      <views:PlaceholderView IsVisible="{Binding IsProxies}"
-                             Heading="Proxies"
-                             Subheading="Shared proxy library"
-                             Detail="The proxy library, parser and checker have not been ported yet. Per-profile proxies already work — set one in the profile editor." />
-
       <views:PlaceholderView IsVisible="{Binding IsImport}"
                              Heading="Import"
                              Subheading="Bring profiles in from elsewhere"

@@ -26,6 +26,15 @@ public sealed class HubPaths
     public string SettingsFile => Path.Combine(Root, "settings.json");
     public string LicenseFile => Path.Combine(Root, "license.key");
 
+    /// <summary>
+    /// The saved proxy library.
+    /// <para>
+    /// Its own file so that importing two hundred proxies never rewrites — and never
+    /// risks — profiles.json, which is the irreplaceable one.
+    /// </para>
+    /// </summary>
+    public string ProxiesFile => Path.Combine(Root, "proxies.json");
+
     /// <summary>Where per-profile branding assets (badged icons, .desktop files) go.</summary>
     public string BrandingDir => Path.Combine(Root, "branding");
 

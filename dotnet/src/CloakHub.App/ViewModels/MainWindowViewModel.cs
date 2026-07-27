@@ -30,6 +30,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel(
         ProfileStore profiles,
+        ProxyStore proxies,
         SettingsStore settings,
         HubPaths paths,
         SessionManager sessions)
@@ -40,7 +41,8 @@ public sealed class MainWindowViewModel : ViewModelBase
 
         Toasts = new ToastHost();
 
-        ProfilesPage = new ProfilesPageViewModel(profiles, settings, paths, Toasts, sessions);
+        ProfilesPage = new ProfilesPageViewModel(profiles, proxies, settings, paths, Toasts, sessions);
+        ProxiesPage = new ProxiesPageViewModel(proxies, profiles, Toasts);
         SettingsPage = new SettingsPageViewModel(settings, paths, Toasts, OnThemeChanged, OnZoomChanged);
 
         // The window scales against this, so it has to start at the stored value --
@@ -77,6 +79,7 @@ public sealed class MainWindowViewModel : ViewModelBase
 
     public ToastHost Toasts { get; }
     public ProfilesPageViewModel ProfilesPage { get; }
+    public ProxiesPageViewModel ProxiesPage { get; }
     public SettingsPageViewModel SettingsPage { get; }
 
     public IReadOnlyList<NavItem> NavItems { get; }
@@ -117,6 +120,7 @@ public sealed class MainWindowViewModel : ViewModelBase
         // editor, by an import, or by a session ending, and re-reading on navigation
         // is far simpler than invalidating from every one of those paths.
         if (route == Route.Profiles) ProfilesPage.Refresh();
+        if (route == Route.Proxies) ProxiesPage.Refresh();
     }
 
     /// <summary>Running session count, for the sidebar badge.</summary>
