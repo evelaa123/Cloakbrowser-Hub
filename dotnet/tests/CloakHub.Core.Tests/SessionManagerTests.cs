@@ -398,4 +398,103 @@ public class SessionManagerTests
         var next = await mgr.StartAsync(P("d"), new LaunchRequest());
         Assert.Equal(1, ((SessionResult.Started)next).Session.Ordinal);
     }
+
+    // ---------------------------------------------------------------------
+    // IsRunning. A lock-free mirror of the session table, so synchronous
+    // callers -- the cookie guard, button enablement -- can ask without
+    // awaiting. Its value is that it never disagrees with ListAsync, so that
+    // is what these check.
+
+    [Fact]
+    public async Task Is_running_tracks_the_session_table()
+    {
+        var mgr = Subject(new FakeLauncher());
+
+        Assert.False(mgr.IsRunning("a"));
+
+        await mgr.StartAsync(P("a"), new LaunchRequest());
+        Assert.True(mgr.IsRunning("a"));
+        Assert.False(mgr.IsRunning("b"));
+
+        await mgr.StopAsync("a");
+        Assert.False(mgr.IsRunning("a"));
+    }
+
+    [Fact]
+    public async Task Is_running_clears_when_the_user_closes_the_window()
+    {
+        // The path that matters most for the cookie guard: the Hub was never told
+        // to stop. If the mirror only cleared on an explicit stop, the profile
+        // would stay permanently un-importable after the user closed the browser
+        // themselves -- with the message blaming a browser that is not running.
+        var context = new FakeContext();
+        var launcher = new FakeLauncher { Factory = _ => context };
+        var mgr = Subject(launcher);
+
+        await mgr.StartAsync(P("a"), new LaunchRequest());
+        Assert.True(mgr.IsRunning("a"));
+
+        context.SimulateUserClose();
+
+        // The close handler is async void from the event's perspective, so the flag
+        // is polled rather than read once.
+        for (var i = 0; i < 100 && mgr.IsRunning("a"); i++) await Task.Delay(10);
+
+        Assert.False(mgr.IsRunning("a"));
+        Assert.Empty(await mgr.ListAsync());
+    }
+
+    [Fact]
+    public async Task A_failed_launch_leaves_the_profile_not_running()
+    {
+        // The failure path releases the ordinal, and has to release the flag with
+        // it. Leaving it set would make a profile that never started look running,
+        // and block cookie imports into it forever.
+        var launcher = new FakeLauncher { Throw = new InvalidOperationException("no binary") };
+        var mgr = Subject(launcher);
+
+        await mgr.StartAsync(P("a"), new LaunchRequest());
+
+        Assert.False(mgr.IsRunning("a"));
+    }
+
+    [Fact]
+    public async Task Stop_all_leaves_nothing_marked_running()
+    {
+        var mgr = Subject(new FakeLauncher());
+        await mgr.StartAsync(P("a"), new LaunchRequest());
+        await mgr.StartAsync(P("b"), new LaunchRequest());
+
+        await mgr.StopAllAsync();
+
+        Assert.False(mgr.IsRunning("a"));
+        Assert.False(mgr.IsRunning("b"));
+    }
+
+    [Fact]
+    public async Task Is_running_agrees_with_list_after_mixed_traffic()
+    {
+        // The mirror and the table are written together under the same lock, and
+        // this is the assertion that they have not drifted. Exercised through a
+        // realistic mix rather than one operation, because drift would come from
+        // a path that forgot to update one of the two.
+        var closable = new FakeContext();
+        var launcher = new FakeLauncher();
+        var mgr = Subject(launcher);
+
+        await mgr.StartAsync(P("a"), new LaunchRequest());
+        launcher.Factory = _ => closable;
+        await mgr.StartAsync(P("b"), new LaunchRequest());
+        launcher.Factory = null;
+        await mgr.StartAsync(P("c"), new LaunchRequest());
+
+        await mgr.StopAsync("a");
+        closable.SimulateUserClose();
+        for (var i = 0; i < 100 && mgr.IsRunning("b"); i++) await Task.Delay(10);
+
+        var live = (await mgr.ListAsync()).Select(s => s.ProfileId).ToHashSet();
+
+        foreach (var id in (string[])["a", "b", "c", "never-started"])
+            Assert.Equal(live.Contains(id), mgr.IsRunning(id));
+    }
 }

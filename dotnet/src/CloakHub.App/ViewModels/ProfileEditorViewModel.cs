@@ -11,7 +11,7 @@ using CloakHub.Core.Platform;
 namespace CloakHub.App.ViewModels;
 
 /// <summary>The editor's tabs. Mirrors <c>TabId</c> in ProfileEditor.tsx.</summary>
-public enum EditorTab { General, Fingerprint, Proxy, Locale, Behaviour, Startup, Advanced }
+public enum EditorTab { General, Fingerprint, Proxy, Cookies, Locale, Behaviour, Startup, Advanced }
 
 /// <summary>
 /// Edits one profile.
@@ -41,8 +41,12 @@ public sealed class ProfileEditorViewModel : ViewModelBase
         IReadOnlyList<ProfileFolder> folders,
         Action<Profile> save,
         Action cancel,
-        IReadOnlyList<SavedProxy>? savedProxies = null)
+        IReadOnlyList<SavedProxy>? savedProxies = null,
+        CookiePanelViewModel? cookies = null)
     {
+        Cookies = cookies;
+        Tabs = BuildTabs();
+
         _draft = profile;
         _save = save;
         _cancel = cancel;
@@ -124,6 +128,7 @@ public sealed class ProfileEditorViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsGeneral));
             OnPropertyChanged(nameof(IsFingerprint));
             OnPropertyChanged(nameof(IsProxy));
+            OnPropertyChanged(nameof(IsCookies));
             OnPropertyChanged(nameof(IsLocale));
             OnPropertyChanged(nameof(IsBehaviour));
             OnPropertyChanged(nameof(IsStartup));
@@ -131,11 +136,33 @@ public sealed class ProfileEditorViewModel : ViewModelBase
         }
     }
 
-    public IReadOnlyList<EditorTabItem> Tabs { get; } =
+    /// <summary>
+    /// The profile's stored cookies, or null where the editor was built without a
+    /// cookie service — which is what hides the tab.
+    /// <para>
+    /// Unlike every other section this one does not edit the draft. Its writes land in
+    /// the profile's Chromium store immediately and survive Cancel, because a cookie
+    /// import is a file operation on a database the browser owns, not a field on a
+    /// form. See <see cref="CookiePanelViewModel"/> for why that is not folded in.
+    /// </para>
+    /// </summary>
+    public CookiePanelViewModel? Cookies { get; }
+
+    /// <summary>
+    /// The tab strip. Built in the constructor rather than inline, because the Cookies
+    /// entry is conditional and a field initialiser runs before <see cref="Cookies"/>
+    /// has been assigned — which would drop the tab every time.
+    /// </summary>
+    public IReadOnlyList<EditorTabItem> Tabs { get; }
+
+    private IReadOnlyList<EditorTabItem> BuildTabs() =>
     [
         new(EditorTab.General, "General") { IsActive = true },
         new(EditorTab.Fingerprint, "Fingerprint"),
         new(EditorTab.Proxy, "Proxy"),
+        // Placed next to Proxy: both are the account's connection to a site, and a
+        // user setting up a bought session sets them together.
+        .. Cookies is null ? Array.Empty<EditorTabItem>() : [new(EditorTab.Cookies, "Cookies")],
         new(EditorTab.Locale, "Locale & Geo"),
         new(EditorTab.Behaviour, "Behaviour"),
         new(EditorTab.Startup, "Startup"),
@@ -147,6 +174,7 @@ public sealed class ProfileEditorViewModel : ViewModelBase
     public bool IsGeneral => _tab == EditorTab.General;
     public bool IsFingerprint => _tab == EditorTab.Fingerprint;
     public bool IsProxy => _tab == EditorTab.Proxy;
+    public bool IsCookies => _tab == EditorTab.Cookies && Cookies is not null;
     public bool IsLocale => _tab == EditorTab.Locale;
     public bool IsBehaviour => _tab == EditorTab.Behaviour;
     public bool IsStartup => _tab == EditorTab.Startup;

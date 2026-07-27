@@ -656,6 +656,153 @@
           </StackPanel>
 
           <!-- ============================================================
+               COOKIES
+
+               The only tab that does not edit the draft. Its buttons write to
+               the profile's Chromium store immediately, so the wording is in
+               the imperative ("Import", "Clear") rather than describing a
+               pending change — Cancel will not undo any of it.
+               ============================================================ -->
+          <StackPanel MaxWidth="640" HorizontalAlignment="Left"
+                      IsVisible="{Binding IsCookies}">
+          <!--
+            The panel's own view model is reached by rebinding DataContext one level
+            in, with x:DataType restated to match. Compiled bindings resolve against
+            the declared type rather than the runtime object, so the two have to be
+            changed together — doing it on the outer element instead would leave the
+            IsVisible binding above looking for IsCookies on the cookie panel.
+          -->
+          <StackPanel Spacing="16" DataContext="{Binding Cookies}"
+                      x:DataType="vm:CookiePanelViewModel">
+
+            <!-- Explains why every button below is dead, rather than leaving the
+                 user to guess that the open browser is the reason. -->
+            <Border Classes="callout warn" IsVisible="{Binding IsRunning}">
+              <TextBlock TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Text="This profile's browser is running. Chromium keeps its own copy of the cookie store and writes it back on exit, so changes made now would be discarded. Stop the profile first." />
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Grid.Column="0" Spacing="3">
+                    <TextBlock Text="Stored cookies" FontWeight="SemiBold" />
+                    <TextBlock Classes="dim" Text="{Binding CountLabel}"
+                               FontSize="{DynamicResource FontSizeSmall}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Classes="ghost" Content="Refresh"
+                          VerticalAlignment="Center"
+                          FontSize="{DynamicResource FontSizeSmall}"
+                          Command="{Binding RefreshCommand}" />
+                </Grid>
+
+                <StackPanel Spacing="5" IsVisible="{Binding HasStoredServices}">
+                  <TextBlock Classes="th" Text="SIGNED IN TO" />
+                  <ItemsControl ItemsSource="{Binding StoredServices}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Classes="callout" Margin="0,0,6,6" Padding="8,4">
+                          <TextBlock Text="{Binding}"
+                                     FontSize="{DynamicResource FontSizeSmall}" />
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="5" IsVisible="{Binding HasStoredDomains}">
+                  <TextBlock Classes="th" Text="DOMAINS" />
+                  <!-- Height-capped: a real browser profile carries hundreds of
+                       domains, and letting the list grow would push the export
+                       buttons off the bottom of the pane. -->
+                  <ScrollViewer MaxHeight="120" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding StoredDomains}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <TextBlock Classes="faint mono" Text="{Binding}"
+                                     FontSize="{DynamicResource FontSizeTiny}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </ScrollViewer>
+                </StackPanel>
+
+                <Border Classes="callout err" IsVisible="{Binding HasWarning}">
+                  <TextBlock Text="{Binding Warning}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}" />
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="ghost" Content="Export JSON"
+                          Command="{Binding ExportJsonCommand}" />
+                  <Button Classes="ghost" Content="Export cookies.txt"
+                          Command="{Binding ExportNetscapeCommand}" />
+                  <Button Classes="danger" Content="Clear"
+                          Command="{Binding ClearCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Import" FontWeight="SemiBold" />
+                  <TextBlock Classes="dim" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}"
+                             Text="Paste a JSON export, a Netscape cookies.txt, or a raw Cookie header. The format is detected." />
+                </StackPanel>
+
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="PASTE" />
+                  <TextBox Text="{Binding Paste, Mode=TwoWay}"
+                           AcceptsReturn="True" TextWrapping="NoWrap"
+                           MinHeight="130" MaxHeight="220"
+                           FontFamily="Consolas, Menlo, DejaVu Sans Mono, monospace"
+                           FontSize="{DynamicResource FontSizeSmall}"
+                           VerticalContentAlignment="Top"
+                           Watermark="[{&quot;name&quot;:&quot;sid&quot;,&quot;value&quot;:&quot;…&quot;,&quot;domain&quot;:&quot;.example.com&quot;}]" />
+                </StackPanel>
+
+                <!-- The readout appears as soon as the text parses, so a truncated
+                     or wrong-account export is caught before it is written rather
+                     than after the browser shows a sign-in page. -->
+                <Border Classes="callout" Classes.err="{Binding PasteIsError}"
+                        IsVisible="{Binding HasPasteSummary}">
+                  <TextBlock Text="{Binding PasteSummary}" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeSmall}" />
+                </Border>
+
+                <StackPanel Spacing="5" IsVisible="{Binding NeedsDomain}">
+                  <TextBlock Classes="th" Text="DOMAIN" />
+                  <TextBox Text="{Binding Domain, Mode=TwoWay}" Watermark="example.com" />
+                  <TextBlock Classes="faint" TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSizeTiny}"
+                             Text="A raw Cookie header carries no domain of its own, so one has to be given here." />
+                </StackPanel>
+
+                <CheckBox IsChecked="{Binding Replace, Mode=TwoWay}"
+                          Content="Replace existing cookies instead of merging" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="primary" Content="Import paste"
+                          Command="{Binding ImportCommand}" />
+                  <Button Classes="ghost" Content="Import files…"
+                          Command="{Binding ImportFilesCommand}" />
+                </StackPanel>
+
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Cookies are written straight into this profile's browser store — unlike the rest of this editor, importing takes effect immediately and is not undone by Cancel." />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          </StackPanel>
+
+          <!-- ============================================================
                LOCALE & GEO
                ============================================================ -->
           <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left"

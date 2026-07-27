@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Covers the view models only. Nothing here constructs a control or touches the
+    Avalonia dispatcher, so no headless test package is needed: the view models are
+    plain objects, and the interesting logic - which commands are enabled, what the
+    readout says - is reachable without a window. The one bug this project was added
+    for (a disabled Import button after the domain was typed) was exactly that kind.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CloakHub.App\CloakHub.App.csproj" />
+  </ItemGroup>
+
+</Project>

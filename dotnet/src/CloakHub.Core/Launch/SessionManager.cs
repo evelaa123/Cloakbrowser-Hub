@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CloakHub.Core.Branding;
 using CloakHub.Core.Model;
 
@@ -85,6 +86,22 @@ public sealed class SessionManager(
     private readonly Dictionary<string, LiveSession> _sessions = [];
     private readonly Dictionary<string, List<SessionLogEntry>> _logs = [];
 
+    // A lock-free mirror of the session table's key set, so callers can ask "is
+    // this profile running?" without awaiting.
+    //
+    // The authoritative table sits behind an async mutex, but the question is asked
+    // from synchronous code: a property getter driving a button's enabled state, and
+    // the cookie layer's guard against writing a store Chromium is about to
+    // overwrite. Blocking on the mutex there would either deadlock the UI thread or
+    // force every such caller to become async, which spreads a launch-layer
+    // implementation detail across the view models.
+    //
+    // Both are only ever written together while holding the mutex, so the mirror
+    // cannot drift. The answer is advisory in any case — a caller that acts on it
+    // must still survive the session ending a microsecond later, which it has to
+    // handle regardless of how the answer was obtained.
+    private readonly ConcurrentDictionary<string, byte> _runningIds = new(StringComparer.Ordinal);
+
     // Guards the session table, the ordinal allocator and the log map together.
     // They are one piece of state: an ordinal handed out but not recorded against
     // a session would leak, and a session recorded without its ordinal would
@@ -112,6 +129,16 @@ public sealed class SessionManager(
 
     /// <summary>Raised for each new log line.</summary>
     public event EventHandler<(string ProfileId, SessionLogEntry Entry)>? Logged;
+
+    /// <summary>
+    /// Whether a profile has a session running, answered without awaiting.
+    /// <para>
+    /// Advisory: the session can end between this returning true and the caller
+    /// acting on it. Callers that must not race — teardown, ordinal release — go
+    /// through <see cref="StopAsync"/>, which re-checks under the lock.
+    /// </para>
+    /// </summary>
+    public bool IsRunning(string profileId) => _runningIds.ContainsKey(profileId);
 
     /// <summary>Sessions currently running.</summary>
     public async Task<IReadOnlyList<SessionInfo>> ListAsync()
@@ -243,6 +270,7 @@ public sealed class SessionManager(
                     return new SessionResult.Failed($"\"{profile.Name}\" is already running.");
                 }
                 _sessions[profile.Id] = session;
+                _runningIds[profile.Id] = 0;
             }
             finally { _mutex.Release(); }
 
@@ -257,7 +285,17 @@ public sealed class SessionManager(
         catch (Exception ex)
         {
             await _mutex.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-            try { _ordinals.Release(ordinal); }
+            try
+            {
+                _ordinals.Release(ordinal);
+
+                // Conditional, because the throw can also come from after the session
+                // was recorded — the change notification runs user handlers. Clearing
+                // the flag unconditionally would then mark a live browser as stopped,
+                // and the guards that read it would let the cookie store be written
+                // underneath it.
+                if (!_sessions.ContainsKey(profile.Id)) _runningIds.TryRemove(profile.Id, out _);
+            }
             finally { _mutex.Release(); }
 
             Log(profile.Id, LogLevel.Error, $"Launch failed: {ex.Message}");
@@ -337,6 +375,7 @@ public sealed class SessionManager(
         {
             if (_sessions.Remove(profileId, out var session))
                 _ordinals.Release(session.Ordinal);
+            _runningIds.TryRemove(profileId, out _);
         }
         finally { _mutex.Release(); }
 

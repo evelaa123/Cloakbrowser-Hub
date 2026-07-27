@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CloakHub.App.Services;
 using CloakHub.Core.Branding;
+using CloakHub.Core.Cookies;
 using CloakHub.Core.Launch;
 using CloakHub.Core.Licensing;
 using CloakHub.Core.Model;
@@ -29,6 +30,7 @@ public sealed class ProfilesPageViewModel : ViewModelBase
     private readonly HubPaths _paths;
     private readonly ToastHost _toasts;
     private readonly SessionManager _sessions;
+    private readonly CookieService _cookies;
 
     /// <summary>
     /// Profiles the UI currently shows as running, with their badge numbers.
@@ -54,6 +56,14 @@ public sealed class ProfilesPageViewModel : ViewModelBase
         _paths = paths;
         _toasts = toasts;
         _sessions = sessions;
+
+        // Built here rather than injected, because it is defined entirely by two
+        // things this page already holds: where a profile's data lives, and whether
+        // its browser is up. Passing it in would mean threading the same settings
+        // store through the composition root a second time to answer the first.
+        _cookies = new CookieService(
+            profileId => paths.ProfileDataDir(settings.Current, profileId),
+            sessions.IsRunning);
 
         // The browser can end a session without the Hub asking -- the user closes the
         // last window, or it crashes. Without this the row would sit there claiming to
@@ -156,8 +166,21 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             _store.Folders(),
             save: SaveFromEditor,
             cancel: CloseEditor,
-            savedProxies: _proxies.List());
+            savedProxies: _proxies.List(),
+            cookies: NewCookiePanel(fresh.Id));
     }
+
+    /// <summary>
+    /// A cookie panel bound to one profile.
+    /// <para>
+    /// A fresh instance per editor rather than a shared one that is re-pointed: the
+    /// panel caches the store's contents, and reusing it would show the previous
+    /// profile's cookies for the moment before the refresh landed — on a screen whose
+    /// whole purpose is to tell the user which account this profile is signed in to.
+    /// </para>
+    /// </summary>
+    private CookiePanelViewModel NewCookiePanel(string profileId) =>
+        new(profileId, _cookies, _sessions.IsRunning, _toasts);
 
     private void SaveFromEditor(Profile profile)
     {
@@ -394,7 +417,8 @@ public sealed class ProfilesPageViewModel : ViewModelBase
             _store.Folders(),
             save: SaveFromEditor,
             cancel: CloseEditor,
-            savedProxies: _proxies.List());
+            savedProxies: _proxies.List(),
+            cookies: NewCookiePanel(created.Id));
 
         return Task.CompletedTask;
     }
