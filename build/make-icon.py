@@ -18,8 +18,8 @@ The wordmark-free variant is not simply the master with the text erased: removin
 the text leaves the cloak sitting high with dead space underneath, so the crop is
 re-centred on the cloak and tightened. That is what `cloak_only()` does.
 
-It also emits the assets the .NET/Avalonia app needs, so the desktop port and the
-Electron build cannot end up showing different logos:
+It emits every icon the .NET/Avalonia app needs, from the one master, so no two
+sizes can disagree about what the logo is:
 
   * `dotnet/src/CloakHub.App/Assets/app-icon.png` — the window and taskbar icon
     Avalonia loads at runtime;
@@ -76,8 +76,6 @@ CLOAK_FILL = 0.80
 
 #: Below this pixel size the wordmark stops being legible and is dropped.
 WORDMARK_MIN = 64
-
-SIZES = (16, 32, 48, 64, 128, 256, 512)
 
 
 def load_master() -> Image.Image:
@@ -167,31 +165,6 @@ def main() -> None:
     master = load_master()
     plain = cloak_only(master)
 
-    # electron-builder reads build/icon.png for the .icns/.ico it derives, and
-    # build/icons/*.png for Linux.
-    master.resize((1024, 1024), Image.LANCZOS).save(os.path.join(HERE, "icon.png"))
-
-    icons_dir = os.path.join(HERE, "icons")
-    os.makedirs(icons_dir, exist_ok=True)
-    for n in SIZES:
-        src = master if n >= WORDMARK_MIN else plain
-        src.resize((n, n), Image.LANCZOS).save(os.path.join(icons_dir, f"{n}x{n}.png"))
-
-    # The sidebar mark renders at 26px, far below WORDMARK_MIN, so it uses the
-    # cloak-only art. Emitted at 4x for high-DPI displays and committed as a
-    # renderer asset, so the UI and the packaged icon come from one source.
-    assets = os.path.join(os.path.dirname(HERE), "src", "renderer", "assets")
-    os.makedirs(assets, exist_ok=True)
-    plain.resize((128, 128), Image.LANCZOS).save(os.path.join(assets, "cloak-mark.png"))
-
-    below = [n for n in SIZES if n < WORDMARK_MIN]
-    print(f"wrote icon.png (1024) and icons/ at {', '.join(map(str, SIZES))}")
-    print(f"wordmark dropped below {WORDMARK_MIN}px: {', '.join(map(str, below))}")
-    print("wrote src/renderer/assets/cloak-mark.png (128, cloak only)")
-
-    # ------------------------------------------------------------------
-    # .NET / Avalonia app
-    # ------------------------------------------------------------------
     os.makedirs(APP_ASSETS, exist_ok=True)
     os.makedirs(CORE_ASSETS, exist_ok=True)
 
@@ -212,9 +185,12 @@ def main() -> None:
 
     write_ico(os.path.join(APP_DIR, "app.ico"), master, plain)
 
+    below = [n for n in ICO_SIZES if n < WORDMARK_MIN]
+
     print("wrote dotnet CloakHub.App/Assets/{app-icon,cloak-mark}.png")
     print("wrote dotnet CloakHub.Core/Assets/app-icon.png (badge base)")
     print(f"wrote dotnet CloakHub.App/app.ico at {', '.join(map(str, ICO_SIZES))}")
+    print(f"wordmark dropped below {WORDMARK_MIN}px: {', '.join(map(str, below))}")
 
 
 if __name__ == "__main__":
