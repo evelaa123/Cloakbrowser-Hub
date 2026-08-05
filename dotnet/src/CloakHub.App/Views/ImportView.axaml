@@ -1,0 +1,319 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CloakHub.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.ImportView"
+             x:DataType="vm:ImportPageViewModel">
+
+  <!--
+    A Panel at the root so the import dialogue can cover the page, matching the
+    profile editor. A second OS window would need its own icon, theme application
+    and close semantics on three platforms, all to show a form that belongs to the
+    list behind it.
+  -->
+  <Panel>
+
+    <Grid RowDefinitions="Auto,*">
+
+      <!-- ================================================================
+           Topbar
+           ================================================================ -->
+      <Border Grid.Row="0" Padding="22,18"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="*,Auto">
+
+          <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Classes="h1" Text="Import" />
+            <TextBlock Classes="sub" Text="Bring an existing browser profile into the Hub" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                      VerticalAlignment="Center">
+            <!--
+              The busy label sits beside the buttons rather than replacing them, so
+              the toolbar does not reflow the moment a scan starts and the user's
+              pointer does not end up over a different control.
+            -->
+            <TextBlock Classes="dim" VerticalAlignment="Center" Margin="0,0,4,0"
+                       Text="{Binding BusyLabel}"
+                       IsVisible="{Binding IsBusy}" />
+
+            <Button Classes="ghost" Content="Scan a folder…"
+                    Command="{Binding ScanFolderCommand}" />
+            <Button Classes="ghost" Content="Import from archive…"
+                    Command="{Binding ScanArchiveCommand}" />
+            <Button Classes="ghost" Content="Re-scan"
+                    Command="{Binding ScanCommand}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- ================================================================
+           Body
+           ================================================================ -->
+      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="22" Spacing="14" MaxWidth="980" HorizontalAlignment="Left">
+
+          <!--
+            Stated up front rather than surfaced as an error afterwards. Copying a
+            profile a running browser holds open produces a torn SQLite file, and by
+            the time the import reports it the user has already waited through the
+            copy.
+          -->
+          <Border Classes="callout">
+            <TextBlock TextWrapping="Wrap">
+              <Run FontWeight="SemiBold" Text="Close the source browser before importing." />
+              <Run Text=" A running browser holds a lock on its profile and copying it then would produce a corrupted session — the import refuses to run in that case rather than handing you a broken profile." />
+            </TextBlock>
+          </Border>
+
+          <!-- ============================================================
+               Manual scan results
+               ============================================================ -->
+          <Border Classes="card" Padding="20" IsVisible="{Binding HasManual}">
+            <StackPanel Spacing="12">
+
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding ManualHeading}" FontWeight="SemiBold" />
+                <TextBlock Classes="faint mono" FontSize="11"
+                           Text="{Binding ManualRoot}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+
+              <StackPanel Spacing="6" IsVisible="{Binding ManualEmpty}">
+                <TextBlock Text="Nothing importable there" FontWeight="SemiBold" />
+                <TextBlock Classes="dim" TextWrapping="Wrap" Text="{Binding ManualNote}" />
+              </StackPanel>
+
+              <Grid RowDefinitions="Auto,Auto" IsVisible="{Binding HasManualRows}">
+                <Border Grid.Row="0" Padding="12,0,12,8">
+                  <Grid ColumnDefinitions="120,*,90,96">
+                    <TextBlock Grid.Column="0" Classes="th" Text="BROWSER" />
+                    <TextBlock Grid.Column="1" Classes="th" Text="PROFILE" />
+                    <TextBlock Grid.Column="2" Classes="th" Text="COOKIES" />
+                  </Grid>
+                </Border>
+
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding ManualRows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DiscoveredRowViewModel">
+                      <Border Padding="12,9"
+                              BorderBrush="{DynamicResource BorderBrush}"
+                              BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="120,*,90,96">
+                          <TextBlock Grid.Column="0" Text="{Binding Browser}"
+                                     VerticalAlignment="Center"
+                                     TextTrimming="CharacterEllipsis" />
+
+                          <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,8,0"
+                                      VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <!-- The full path is the only way to tell two identically
+                                 named "Default" profiles apart. -->
+                            <TextBlock Classes="faint mono" FontSize="11"
+                                       Text="{Binding Path}"
+                                       ToolTip.Tip="{Binding Path}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <Border Grid.Column="2" Classes="badge"
+                                  Classes.ok="{Binding HasCookies}"
+                                  HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CookieLabel}" />
+                          </Border>
+
+                          <Button Grid.Column="3" Classes="primary" Content="Import"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  Command="{Binding ImportCommand}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Grid>
+
+              <TextBlock Classes="faint" TextWrapping="Wrap"
+                         Text="{Binding ManualNote}"
+                         IsVisible="{Binding HasManualNote}" />
+
+              <Button Classes="ghost" Content="Clear results"
+                      HorizontalAlignment="Left"
+                      Command="{Binding ClearManualCommand}" />
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================
+               Automatic discovery
+               ============================================================ -->
+          <Border Classes="card" Padding="20">
+            <StackPanel Spacing="12">
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="Browser profiles on this machine" FontWeight="SemiBold" />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="Chrome, Edge, Brave, Chromium, Opera, Vivaldi, Yandex and Firefox are searched in their standard locations for your operating system." />
+              </StackPanel>
+
+              <TextBlock Classes="dim" Text="Looking for browser profiles…"
+                         IsVisible="{Binding IsBusy}" />
+
+              <StackPanel Spacing="6" IsVisible="{Binding NothingFound}">
+                <TextBlock Text="No browser profiles found" FontWeight="SemiBold" />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="Nothing was found in the standard locations. You can still create a profile manually and import cookies into it from a browser extension export, or point the scanner at a folder yourself." />
+              </StackPanel>
+
+              <Grid RowDefinitions="Auto,Auto" IsVisible="{Binding HasFound}">
+                <Border Grid.Row="0" Padding="12,0,12,8">
+                  <Grid ColumnDefinitions="120,*,90,90,96">
+                    <TextBlock Grid.Column="0" Classes="th" Text="BROWSER" />
+                    <TextBlock Grid.Column="1" Classes="th" Text="PROFILE" />
+                    <TextBlock Grid.Column="2" Classes="th" Text="COOKIES" />
+                    <TextBlock Grid.Column="3" Classes="th" Text="SIZE" />
+                  </Grid>
+                </Border>
+
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Found}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DiscoveredRowViewModel">
+                      <Border Padding="12,9"
+                              BorderBrush="{DynamicResource BorderBrush}"
+                              BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="120,*,90,90,96">
+                          <TextBlock Grid.Column="0" Text="{Binding Browser}"
+                                     VerticalAlignment="Center"
+                                     TextTrimming="CharacterEllipsis" />
+
+                          <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,8,0"
+                                      VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="faint mono" FontSize="11"
+                                       Text="{Binding Path}"
+                                       ToolTip.Tip="{Binding Path}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <Border Grid.Column="2" Classes="badge"
+                                  Classes.ok="{Binding HasCookies}"
+                                  HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CookieLabel}" />
+                          </Border>
+
+                          <TextBlock Grid.Column="3" Classes="faint"
+                                     VerticalAlignment="Center"
+                                     Text="{Binding SizeLabel}" />
+
+                          <Button Grid.Column="4" Classes="primary" Content="Import"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  Command="{Binding ImportCommand}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Grid>
+
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================
+               Cookies-only route
+               ============================================================ -->
+          <Border Classes="card" Padding="20">
+            <StackPanel Spacing="10">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Importing cookies only" FontWeight="SemiBold" />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="If you want the session and not the whole profile, export cookies from the source browser and import them into a Hub profile." />
+              </StackPanel>
+
+              <StackPanel Spacing="8" Margin="4,4,0,0">
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="1.  Install a cookie exporter in the source browser (Cookie-Editor, EditThisCookie or similar) and export as JSON while logged in." />
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="2.  Create or open a profile here, go to the Cookies tab and import that file. A Netscape cookies.txt or a raw Cookie: header also works." />
+                <!--
+                  Third point looks pedantic and is the one that actually decides
+                  whether the import works: most session cookies are httpOnly, and an
+                  export without them produces a profile that looks complete and is
+                  signed out.
+                -->
+                <TextBlock Classes="dim" TextWrapping="Wrap"
+                           Text="3.  Make sure the export includes httpOnly cookies — most session cookies are httpOnly, and an export without them will not keep you signed in." />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- ==================================================================
+         The import dialogue, covering the page while it is open
+         ================================================================== -->
+    <Border IsVisible="{Binding IsDialogOpen}"
+            Background="{DynamicResource BgBrush}">
+      <Grid RowDefinitions="Auto,*,Auto">
+
+        <Border Grid.Row="0" Padding="22,16"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+          <StackPanel Spacing="3">
+            <TextBlock Classes="h1" Text="{Binding DialogTitle}"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Classes="sub" Text="{Binding DialogSubtitle}"
+                       TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="22" Spacing="16" MaxWidth="620" HorizontalAlignment="Left">
+
+            <StackPanel Spacing="6">
+              <TextBlock Text="New profile name" Classes="dim" />
+              <TextBox Text="{Binding NewName, Mode=TwoWay}" />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+              <CheckBox IsChecked="{Binding CopyData, Mode=TwoWay}"
+                        Content="Copy browser data (cookies, logins, local storage)" />
+              <TextBlock Classes="dim" TextWrapping="Wrap" Margin="26,0,0,0"
+                         Text="Copies the profile's session state so you stay signed in. Uncheck to import only the language settings and start with a clean profile." />
+            </StackPanel>
+
+            <Border Classes="callout warn" IsVisible="{Binding ShowCopyNotice}">
+              <StackPanel Spacing="6">
+                <!--
+                  Split in two so the size forewarning only appears for a profile
+                  large enough to make the copy look like a hang.
+                -->
+                <TextBlock TextWrapping="Wrap" Text="{Binding SizeWarning}"
+                           IsVisible="{Binding SizeWarning, Converter={x:Static vm:Converters.NotEmpty}}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="Caches are skipped — only session-bearing data is copied. The source profile is read only and never modified." />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="callout warn" IsVisible="{Binding ShowNoCookieWarning}">
+              <TextBlock TextWrapping="Wrap"
+                         Text="No cookie database was found in this profile, so no signed-in session will carry over." />
+            </Border>
+
+          </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Padding="22,14"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Classes="ghost" Content="Cancel" Command="{Binding CancelImportCommand}" />
+            <Button Classes="primary" Content="{Binding ImportButtonLabel}"
+                    Command="{Binding ConfirmImportCommand}" />
+          </StackPanel>
+        </Border>
+
+      </Grid>
+    </Border>
+
+  </Panel>
+</UserControl>

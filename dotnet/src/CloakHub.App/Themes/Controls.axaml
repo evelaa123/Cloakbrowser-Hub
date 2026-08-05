@@ -1,0 +1,407 @@
+<!--
+  Control styles, ported from the component rules in app.css.
+
+  Selector classes keep their CSS names ("nav-item", "btn", "badge") so the two
+  implementations stay diffable. Where CSS had a feature Avalonia lacks the
+  substitution is noted rather than silently approximated.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Baseline: the body colours, inherited by everything below.
+
+    FontFamily is not set here. WithInterFont() in Program.cs makes Inter the
+    default family for the whole app, so naming it again would only create a second
+    place to keep in step, and referencing the package's resource key from a style
+    fails to resolve at build time.
+  -->
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource BgBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+
+  <!-- Text roles: .faint, .dim, .mono. -->
+  <Style Selector="TextBlock.dim">
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.faint">
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.mono">
+    <!--
+      A stack rather than one family: unlike Inter, no monospace face is bundled, so
+      this falls through per platform (Consolas on Windows, Menlo on macOS, then the
+      generic). Mono text here is hostnames, ports and MAC addresses: alignment
+      matters, the exact face does not.
+    -->
+    <Setter Property="FontFamily" Value="Consolas, Menlo, DejaVu Sans Mono, monospace" />
+  </Style>
+
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="19" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="TextBlock.sub">
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
+  </Style>
+
+  <!-- ====================================================================
+       Sidebar navigation (.nav-item)
+       ==================================================================== -->
+
+  <Style Selector="Button.nav-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+    <Setter Property="Padding" Value="9,7" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <!--
+      The CSS transition on background and colour. Avalonia animates the property
+      rather than declaring a shorthand, so each is listed; 120ms matches the CSS
+      transition duration token.
+    -->
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.nav-item:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button.nav-item.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgActiveBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button.nav-item.active">
+    <!--
+      CSS asked for 550, between Medium (500) and SemiBold (600). Inter is a
+      variable font but Avalonia's FontWeight is an enum here, so this rounds to
+      Medium: erring lighter keeps the active row from looking bolder than the
+      heading above it.
+    -->
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!-- ====================================================================
+       Buttons (.btn, .btn.primary, .btn.danger)
+       ==================================================================== -->
+
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{DynamicResource BgInputBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.danger">
+    <Setter Property="Foreground" Value="{DynamicResource ErrBrush}" />
+  </Style>
+
+  <Style Selector="Button.danger /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ErrBrush}" />
+  </Style>
+
+  <!-- A borderless icon button, for row actions. -->
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="7,4" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+  </Style>
+
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <!-- ====================================================================
+       Inputs
+       ==================================================================== -->
+
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{DynamicResource BgInputBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="Padding" Value="9,6" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Fluent tints the focused background; the CSS build did not. -->
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource BgInputBrush}" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{DynamicResource BgInputBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="Padding" Value="9,6" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <Style Selector="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeNormal}" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <!-- ====================================================================
+       Badges (.badge, .ok / .warn / .err)
+       ==================================================================== -->
+
+  <Style Selector="Border.badge">
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <!-- CSS border-radius: 999px, i.e. a pill regardless of height. -->
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.badge > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+
+  <!--
+    The CSS used color-mix() for the tinted fills: 45% of the status colour for the
+    border, 12% for the background. Avalonia has no equivalent, so the same result
+    is expressed as an alpha on the status colour: 45% = 0x73, 12% = 0x1f. The
+    literals are duplicated per theme colour because a brush cannot be derived from
+    a DynamicResource colour at parse time.
+  -->
+  <Style Selector="Border.badge.ok">
+    <Setter Property="Background" Value="#1f22c55e" />
+    <Setter Property="BorderBrush" Value="#7322c55e" />
+  </Style>
+  <Style Selector="Border.badge.ok > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
+  </Style>
+
+  <Style Selector="Border.badge.warn">
+    <Setter Property="Background" Value="#1ff59e0b" />
+    <Setter Property="BorderBrush" Value="#73f59e0b" />
+  </Style>
+  <Style Selector="Border.badge.warn > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+  </Style>
+
+  <Style Selector="Border.badge.err">
+    <Setter Property="Background" Value="#1ff43f5e" />
+    <Setter Property="BorderBrush" Value="#73f43f5e" />
+  </Style>
+  <Style Selector="Border.badge.err > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ErrBrush}" />
+  </Style>
+
+  <!-- ====================================================================
+       Surfaces
+       ==================================================================== -->
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource BgElevatedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius}" />
+    <Setter Property="Padding" Value="14" />
+  </Style>
+
+  <Style Selector="Border.sidebar">
+    <Setter Property="Background" Value="{DynamicResource BgElevatedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <!-- Right edge only, matching the CSS border-right. -->
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+
+  <!-- Callout (.callout): an inline notice, tinted by severity. -->
+  <Style Selector="Border.callout">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="Background" Value="{DynamicResource BgElevatedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <Style Selector="Border.callout.warn">
+    <Setter Property="Background" Value="#1ff59e0b" />
+    <Setter Property="BorderBrush" Value="#73f59e0b" />
+  </Style>
+
+  <Style Selector="Border.callout.err">
+    <Setter Property="Background" Value="#1ff43f5e" />
+    <Setter Property="BorderBrush" Value="#73f43f5e" />
+  </Style>
+
+  <!-- ====================================================================
+       Editor tab strip (.tab)
+
+       Distinct from .nav-item: the sidebar marks the active page with a filled
+       row, whereas these sit in a single line under a heading, so the active one
+       is marked with the accent underline the CSS used. Avalonia has no
+       ::after pseudo-element, so the underline is a bottom BorderThickness on
+       the button itself rather than a generated box.
+       ==================================================================== -->
+
+  <Style Selector="Button.tab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.tab /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.tab:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <Style Selector="Button.tab.active">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.tab.active /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+
+  <!-- ====================================================================
+       Colour swatch (.swatch)
+
+       Only the frame. The colour itself is a child Border in the template that
+       uses this class, because a Background set on the Button is painted over by
+       the ContentPresenter's own fill on hover and press.
+       ==================================================================== -->
+
+  <Style Selector="Button.swatch">
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Hover marks the frame rather than the fill, so the colour stays readable. -->
+  <Style Selector="Button.swatch:pointerover">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.swatch:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Inline validation message under a field (.err-text). -->
+  <Style Selector="TextBlock.err-text">
+    <Setter Property="Foreground" Value="{DynamicResource ErrBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeSmall}" />
+  </Style>
+
+  <!-- ====================================================================
+       Table (.table)
+       ==================================================================== -->
+
+  <Style Selector="TextBlock.th">
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSizeTiny}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BgActiveBrush}" />
+  </Style>
+
+</Styles>

@@ -1,0 +1,7 @@
+bin/
+obj/
+
+# Core dumps. A crash in the Avalonia app drops a ~190MB ELF core file next to
+# whatever directory it was launched from, which is easy to stage by accident.
+core
+core.*

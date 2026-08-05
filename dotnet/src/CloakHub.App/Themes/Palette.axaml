@@ -1,0 +1,101 @@
+<!--
+  Colour tokens, ported 1:1 from the Electron build's app.css.
+
+  Kept as two ResourceDictionary themes keyed on Light/Dark so Avalonia's
+  ActualThemeVariant switches them, which is the direct equivalent of swapping the
+  variable block on <html data-theme>. Names match the CSS custom properties
+  exactly ("BgElevatedColor" for the bg-elevated custom property) so the two
+  implementations can be diffed by eye instead of by memory when a colour is
+  adjusted.
+
+  Note on style: XML forbids a double hyphen inside a comment, so CSS custom
+  properties are named here without their leading dashes.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="BgColor">#0f1115</Color>
+      <Color x:Key="BgElevatedColor">#161a21</Color>
+      <Color x:Key="BgInputColor">#1c212a</Color>
+      <Color x:Key="BgHoverColor">#1f242e</Color>
+      <Color x:Key="BgActiveColor">#252b37</Color>
+      <Color x:Key="BorderColor">#262c38</Color>
+      <Color x:Key="BorderStrongColor">#333b4a</Color>
+      <Color x:Key="TextColor">#e6e9ef</Color>
+      <Color x:Key="TextDimColor">#9aa4b5</Color>
+      <Color x:Key="TextFaintColor">#6b7688</Color>
+      <Color x:Key="AccentColor">#6366f1</Color>
+      <Color x:Key="AccentHoverColor">#7c7ff5</Color>
+      <Color x:Key="AccentTextColor">#ffffff</Color>
+      <Color x:Key="OkColor">#22c55e</Color>
+      <Color x:Key="WarnColor">#f59e0b</Color>
+      <Color x:Key="ErrColor">#f43f5e</Color>
+
+      <!--
+        The CSS shadow is rgba(0,0,0,0.45). Avalonia's BoxShadow takes a solid
+        colour with the alpha in the hex, so the same value is expressed as #73:
+        0.45 * 255 = 114.75, rounded to 115 = 0x73.
+      -->
+      <SolidColorBrush x:Key="ShadowBrush" Color="#73000000" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="BgColor">#f6f7f9</Color>
+      <Color x:Key="BgElevatedColor">#ffffff</Color>
+      <Color x:Key="BgInputColor">#ffffff</Color>
+      <Color x:Key="BgHoverColor">#eef0f4</Color>
+      <Color x:Key="BgActiveColor">#e4e8ef</Color>
+      <Color x:Key="BorderColor">#e1e5ec</Color>
+      <Color x:Key="BorderStrongColor">#c8cfda</Color>
+      <Color x:Key="TextColor">#14181f</Color>
+      <Color x:Key="TextDimColor">#5b6575</Color>
+      <Color x:Key="TextFaintColor">#8b95a5</Color>
+      <Color x:Key="AccentColor">#5457e5</Color>
+      <Color x:Key="AccentHoverColor">#4145d6</Color>
+      <Color x:Key="AccentTextColor">#ffffff</Color>
+      <Color x:Key="OkColor">#16a34a</Color>
+      <Color x:Key="WarnColor">#d97706</Color>
+      <Color x:Key="ErrColor">#e11d48</Color>
+
+      <!-- rgba(15,20,30,0.12): 0.12 * 255 = 30.6, rounded to 31 = 0x1f. -->
+      <SolidColorBrush x:Key="ShadowBrush" Color="#1f0f141e" />
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+
+  <!--
+    Brushes derived from the theme colours above.
+
+    Declared once outside the theme dictionaries and pointed at the colour keys,
+    so a colour is defined in exactly one place per theme. Duplicating the brush
+    list into both themes is how a light-mode-only colour bug gets introduced.
+  -->
+  <SolidColorBrush x:Key="BgBrush" Color="{DynamicResource BgColor}" />
+  <SolidColorBrush x:Key="BgElevatedBrush" Color="{DynamicResource BgElevatedColor}" />
+  <SolidColorBrush x:Key="BgInputBrush" Color="{DynamicResource BgInputColor}" />
+  <SolidColorBrush x:Key="BgHoverBrush" Color="{DynamicResource BgHoverColor}" />
+  <SolidColorBrush x:Key="BgActiveBrush" Color="{DynamicResource BgActiveColor}" />
+  <SolidColorBrush x:Key="BorderBrush" Color="{DynamicResource BorderColor}" />
+  <SolidColorBrush x:Key="BorderStrongBrush" Color="{DynamicResource BorderStrongColor}" />
+  <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource TextColor}" />
+  <SolidColorBrush x:Key="TextDimBrush" Color="{DynamicResource TextDimColor}" />
+  <SolidColorBrush x:Key="TextFaintBrush" Color="{DynamicResource TextFaintColor}" />
+  <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentHoverBrush" Color="{DynamicResource AccentHoverColor}" />
+  <SolidColorBrush x:Key="AccentTextBrush" Color="{DynamicResource AccentTextColor}" />
+  <SolidColorBrush x:Key="OkBrush" Color="{DynamicResource OkColor}" />
+  <SolidColorBrush x:Key="WarnBrush" Color="{DynamicResource WarnColor}" />
+  <SolidColorBrush x:Key="ErrBrush" Color="{DynamicResource ErrColor}" />
+
+  <!-- Geometry and motion tokens: radius, radius-sm, sidebar-w, t. -->
+  <CornerRadius x:Key="Radius">10</CornerRadius>
+  <CornerRadius x:Key="RadiusSm">7</CornerRadius>
+  <x:Double x:Key="SidebarWidth">208</x:Double>
+  <x:Double x:Key="FontSizeNormal">13</x:Double>
+  <x:Double x:Key="FontSizeSmall">12</x:Double>
+  <x:Double x:Key="FontSizeTiny">11</x:Double>
+
+</ResourceDictionary>

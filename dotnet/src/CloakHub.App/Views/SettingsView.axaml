@@ -1,0 +1,306 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:CloakHub.App.ViewModels"
+             xmlns:c="using:CloakHub.App.Controls"
+             mc:Ignorable="d"
+             x:Class="CloakHub.App.Views.SettingsView"
+             x:DataType="vm:SettingsPageViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <Border Grid.Row="0" Padding="22,18"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Spacing="3">
+        <TextBlock Classes="h1" Text="Settings" />
+        <TextBlock Classes="sub" Text="Applies to the whole application" />
+      </StackPanel>
+    </Border>
+
+    <!--
+      Scrolled, unlike the profiles list. There is more here than fits an 760px
+      window at the smallest supported size, and a settings page that clips its last
+      card gives the user no way to reach it.
+    -->
+    <ScrollViewer Grid.Row="1" Padding="22">
+      <StackPanel Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
+
+        <!-- ============================================================
+             Appearance
+             ============================================================ -->
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <TextBlock Text="Appearance" FontWeight="SemiBold" />
+
+            <!--
+              FormPair, not a star-sized Grid: a grid splits whatever width it is
+              given, so at the smallest window these labels were clipped mid-word.
+              This stacks instead once a column would fall below its minimum.
+            -->
+            <c:FormPair>
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="THEME" />
+                <ComboBox ItemsSource="{Binding Themes}"
+                          SelectedItem="{Binding Theme, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Converter={x:Static vm:Converters.ThemeName}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="INTERFACE SIZE" />
+                <ComboBox ItemsSource="{Binding ZoomSteps}"
+                          SelectedItem="{Binding UiZoom, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:Double">
+                      <!-- Bound to the raw double, shown as a percentage. -->
+                      <TextBlock Text="{Binding Converter={x:Static vm:Converters.ZoomPercent}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Scales the whole interface, not just the text." />
+              </StackPanel>
+            </c:FormPair>
+          </StackPanel>
+        </Border>
+
+        <!-- ============================================================
+             Sessions
+             ============================================================ -->
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Sessions" FontWeight="SemiBold" />
+              <TextBlock Classes="dim" TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Text="How many browsers the Hub will open at once, and what happens to them when you quit." />
+            </StackPanel>
+
+            <c:FormPair>
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="MAXIMUM CONCURRENT SESSIONS" />
+                <NumericUpDown Value="{Binding MaxConcurrentSessions, Mode=TwoWay}"
+                               Minimum="1" Maximum="500" Increment="1"
+                               FormatString="0" />
+                <!-- States which constraint binds, from the same resolver the launch path uses. -->
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="{Binding SessionLimitHint}" />
+              </StackPanel>
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="NEW PROFILES DEFAULT TO" />
+                <!-- Labelled through a converter so the enum's "Macos" never reaches the user. -->
+                <ComboBox ItemsSource="{Binding Platforms}"
+                          SelectedItem="{Binding DefaultPlatform, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Converter={x:Static vm:Converters.PlatformName}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="The OS a brand-new profile pretends to run." />
+              </StackPanel>
+            </c:FormPair>
+
+            <StackPanel Spacing="10">
+              <StackPanel Spacing="3">
+                <CheckBox IsChecked="{Binding SaveCookiesOnClose, Mode=TwoWay}"
+                          Content="Save cookies when a session closes" />
+                <TextBlock Classes="faint" TextWrapping="Wrap" Margin="26,0,0,0"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Writes the browser's cookies back into the profile's encrypted jar, so a refreshed session token is not lost." />
+              </StackPanel>
+
+              <StackPanel Spacing="3">
+                <CheckBox IsChecked="{Binding CloseSessionsOnQuit, Mode=TwoWay}"
+                          Content="Close all sessions when the app quits" />
+                <TextBlock Classes="faint" TextWrapping="Wrap" Margin="26,0,0,0"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Off leaves running browsers open as independent processes — their cookies will not be saved back." />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- ============================================================
+             Browser binary
+             ============================================================ -->
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Browser binary" FontWeight="SemiBold" />
+              <TextBlock Classes="dim" TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Text="Which stealth Chromium build sessions launch. Leave the version blank unless you need to roll back after a bad update." />
+            </StackPanel>
+
+            <c:FormPair>
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="RELEASE CHANNEL" />
+                <ComboBox ItemsSource="{Binding Channels}"
+                          SelectedItem="{Binding ReleaseChannel, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Converter={x:Static vm:Converters.ChannelName}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="PIN A VERSION" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <!--
+                    Not written on every keystroke, unlike the rest of this page: a
+                    half-typed version is a different pin from the finished one.
+                  -->
+                  <TextBox Grid.Column="0" Classes="mono" Watermark="Latest"
+                           Text="{Binding BrowserVersionDraft, Mode=TwoWay}" />
+                  <Button Grid.Column="1" Content="Apply" Margin="6,0,0,0"
+                          Click="OnApplyVersion" />
+                </Grid>
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Blank = always use the newest build for your license." />
+              </StackPanel>
+            </c:FormPair>
+
+            <Border Classes="callout warn" IsVisible="{Binding IsPreviewChannel}">
+              <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource FontSizeSmall}"
+                         Text="Preview builds get fingerprint patches earliest but are less tested. Use stable for anything that matters." />
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- ============================================================
+             Storage
+             ============================================================ -->
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Storage" FontWeight="SemiBold" />
+              <TextBlock Classes="dim" TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Text="Where profile data lives. Moving this does not migrate existing folders — copy them yourself if you change it." />
+            </StackPanel>
+
+            <StackPanel Spacing="5">
+              <TextBlock Classes="th" Text="PROFILES DIRECTORY" />
+              <Grid ColumnDefinitions="*,Auto,Auto">
+                <!-- Read-only: the path is chosen with the native picker, not typed. -->
+                <TextBox Grid.Column="0" Classes="mono" IsReadOnly="True"
+                         Text="{Binding EffectiveProfilesDir}" />
+                <Button Grid.Column="1" Content="Change…" Margin="6,0,0,0"
+                        Command="{Binding ChangeProfilesDirCommand}" />
+                <Button Grid.Column="2" Classes="ghost" Content="Reset" Margin="4,0,0,0"
+                        IsVisible="{Binding HasCustomProfilesDir}"
+                        Command="{Binding ResetProfilesDirCommand}" />
+              </Grid>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="Open profiles folder" Command="{Binding OpenProfilesFolderCommand}" />
+              <Button Content="Open app data folder" Command="{Binding OpenDataFolderCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- ============================================================
+             Automation
+             ============================================================ -->
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Automation" FontWeight="SemiBold" />
+              <TextBlock Classes="dim" TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSizeSmall}"
+                         Text="A local HTTP API for driving profiles from Puppeteer, Playwright or Selenium." />
+            </StackPanel>
+
+            <CheckBox IsChecked="{Binding AutomationEnabled, Mode=TwoWay}"
+                      Content="Enable the local automation API" />
+
+            <!--
+              The port and token only appear once enabled. Showing a bearer token for
+              a service that is switched off invites pasting it into a script that
+              will then fail with a connection refused for no visible reason.
+            -->
+            <StackPanel Spacing="14" IsVisible="{Binding AutomationEnabled}">
+              <c:FormPair>
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="PORT" />
+                  <NumericUpDown Value="{Binding AutomationPort, Mode=TwoWay}"
+                                 Minimum="1024" Maximum="65535" Increment="1"
+                                 FormatString="0" />
+                </StackPanel>
+                <StackPanel Spacing="5">
+                  <TextBlock Classes="th" Text="BASE URL" />
+                  <TextBox Classes="mono" IsReadOnly="True" Text="{Binding AutomationUrl}" />
+                </StackPanel>
+              </c:FormPair>
+
+              <StackPanel Spacing="5">
+                <TextBlock Classes="th" Text="BEARER TOKEN" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox Grid.Column="0" Classes="mono" IsReadOnly="True"
+                           Text="{Binding AutomationToken}" />
+                  <Button Grid.Column="1" Content="Regenerate" Margin="6,0,0,0"
+                          Command="{Binding RegenerateTokenCommand}" />
+                </Grid>
+                <TextBlock Classes="faint" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeTiny}"
+                           Text="Required on every request. This endpoint can launch browsers, so anything else on this machine that learns the token can drive your profiles." />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- ============================================================
+             About
+             ============================================================ -->
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <TextBlock Text="About" FontWeight="SemiBold" />
+            <!--
+              Wrapping rather than three fixed columns. These are diagnostic
+              values people are asked to read back during support, so the runtime
+              string in particular must not be reduced to an ellipsis on a narrow
+              window. A truncated version number is worse than a wrapped one.
+            -->
+            <WrapPanel ItemSpacing="28" LineSpacing="12">
+              <StackPanel Spacing="3" MinWidth="140">
+                <TextBlock Classes="th" Text="HUB VERSION" />
+                <TextBlock Classes="mono" FontSize="{DynamicResource FontSizeSmall}"
+                           Text="{Binding VersionLabel}" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="3" MinWidth="140">
+                <TextBlock Classes="th" Text="PLATFORM" />
+                <TextBlock Classes="mono" FontSize="{DynamicResource FontSizeSmall}"
+                           Text="{Binding PlatformLabel}" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="3" MinWidth="140">
+                <TextBlock Classes="th" Text="RUNTIME" />
+                <TextBlock Classes="mono" FontSize="{DynamicResource FontSizeSmall}"
+                           Text="{Binding RuntimeLabel}" TextWrapping="Wrap" />
+              </StackPanel>
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

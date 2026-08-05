@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{DF6E8960-8FF9-4A66-AAE6-60E257EA9514}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloakHub.Core", "src\CloakHub.Core\CloakHub.Core.csproj", "{FF3CAEC5-C69E-4C73-8EB8-6FC2B7E2128D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B7861A5F-F9CC-4411-ADA0-B414BF39D690}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloakHub.Core.Tests", "tests\CloakHub.Core.Tests\CloakHub.Core.Tests.csproj", "{4113DD5E-81A8-4C3F-A893-9A369C3777EC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloakHub.Doctor", "src\CloakHub.Doctor\CloakHub.Doctor.csproj", "{43BDC7F1-511A-4559-B3CB-5FC937465241}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloakHub.App", "src\CloakHub.App\CloakHub.App.csproj", "{6BFF97DB-EDDF-43A7-AC3B-954F8516B126}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloakHub.App.Tests", "tests\CloakHub.App.Tests\CloakHub.App.Tests.csproj", "{00C0D15B-DFCF-4501-A4ED-A9E8AC2D42DF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FF3CAEC5-C69E-4C73-8EB8-6FC2B7E2128D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF3CAEC5-C69E-4C73-8EB8-6FC2B7E2128D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF3CAEC5-C69E-4C73-8EB8-6FC2B7E2128D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF3CAEC5-C69E-4C73-8EB8-6FC2B7E2128D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4113DD5E-81A8-4C3F-A893-9A369C3777EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4113DD5E-81A8-4C3F-A893-9A369C3777EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4113DD5E-81A8-4C3F-A893-9A369C3777EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4113DD5E-81A8-4C3F-A893-9A369C3777EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43BDC7F1-511A-4559-B3CB-5FC937465241}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43BDC7F1-511A-4559-B3CB-5FC937465241}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43BDC7F1-511A-4559-B3CB-5FC937465241}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43BDC7F1-511A-4559-B3CB-5FC937465241}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6BFF97DB-EDDF-43A7-AC3B-954F8516B126}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BFF97DB-EDDF-43A7-AC3B-954F8516B126}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6BFF97DB-EDDF-43A7-AC3B-954F8516B126}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6BFF97DB-EDDF-43A7-AC3B-954F8516B126}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00C0D15B-DFCF-4501-A4ED-A9E8AC2D42DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00C0D15B-DFCF-4501-A4ED-A9E8AC2D42DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00C0D15B-DFCF-4501-A4ED-A9E8AC2D42DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00C0D15B-DFCF-4501-A4ED-A9E8AC2D42DF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FF3CAEC5-C69E-4C73-8EB8-6FC2B7E2128D} = {DF6E8960-8FF9-4A66-AAE6-60E257EA9514}
+		{4113DD5E-81A8-4C3F-A893-9A369C3777EC} = {B7861A5F-F9CC-4411-ADA0-B414BF39D690}
+		{43BDC7F1-511A-4559-B3CB-5FC937465241} = {DF6E8960-8FF9-4A66-AAE6-60E257EA9514}
+		{6BFF97DB-EDDF-43A7-AC3B-954F8516B126} = {DF6E8960-8FF9-4A66-AAE6-60E257EA9514}
+		{00C0D15B-DFCF-4501-A4ED-A9E8AC2D42DF} = {B7861A5F-F9CC-4411-ADA0-B414BF39D690}
+	EndGlobalSection
+EndGlobal
