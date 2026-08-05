@@ -414,5 +414,4 @@ site's terms of service, commit fraud or evade a ban is on you. Check the rules
 of any platform you point it at.
 
 ## Licence
-
-Not yet chosen. All rights reserved for now.
+MIT.
